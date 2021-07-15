@@ -217,14 +217,6 @@ public struct BPhysicsWorld : IDisposable
                     hit.Entity = body.Entity;
                     hit.GenGrid = new int3(checkg.x , checkg.y + 1, checkg.z) ;
                     return true;
-                }else if (checkg.y <= 0 && nowgrid.x >=0 && nowgrid.z >= 0)
-                {
-                    
-                    hit.Position = now;
-                    hit.EntityGrid = checkg;
-                    hit.Entity = Entity.Null;
-                    hit.GenGrid = checkg ; 
-                    return true;
                 }
             }
             
@@ -240,6 +232,16 @@ public struct BPhysicsWorld : IDisposable
                     hit.GenGrid = nowgrid;
                     return true;
                 }
+            }
+            
+            if (now.y <= 0 && nowgrid.x >=0 && nowgrid.z >= 0)
+            {
+                    
+                hit.Position = now;
+                hit.EntityGrid = checkg;
+                hit.Entity = Entity.Null;
+                hit.GenGrid = checkg ; 
+                return true;
             }
 
             if (i > 20)
