@@ -69,7 +69,7 @@ public class InitTerrainSystem : SystemBase
             {
                 
                 ref BoxBlobAsset boxBlobAsset = ref boxBuff[0].BoxesRef.Value;
-                float3 setpos = new float3{x=10,y=0,z=10};
+                float3 setpos = new float3{x=10.5f,y=0.5f,z=10.5f};
                 for (int i = 0; i < tex.width; i++)
                 {
                     for (int j = 0; j < tex.height; j++)
@@ -96,7 +96,7 @@ public class InitTerrainSystem : SystemBase
                         }
 
                         var e = EntityManager.Instantiate(boxBlobAsset.Boxes[box]); 
-                        var pos =   new float3((float)i,(float)j + 0.5f,0.5f) + setpos;   
+                        var pos =   new float3((float)i,(float)j  ,0) + setpos;   
                         
                         EntityManager.SetComponentData(e, new Translation() { Value = pos }); 
 //                        EntityManager.AddComponent(e, typeof(MaterialColor));
