@@ -1,8 +1,8 @@
-using System.Collections.Generic;
+using System.IO;
 using Unity.Entities;
 using UnityEngine;
-using Unity.Collections;
 using Unity.Mathematics;
+using Unity.Rendering;
 using Unity.Transforms;
  
 [GenerateAuthoringComponent]
@@ -40,18 +40,74 @@ public class InitTerrainSystem : SystemBase
         float result = total/totalAmplitude;
         return result;
     }
-
+    public static Texture2D LoadPNG(string filePath) {
+ 
+        Texture2D tex = null;
+        byte[] fileData;
+ 
+        if (File.Exists(filePath))     {
+            fileData = File.ReadAllBytes(filePath);
+            tex = new Texture2D(2, 2);
+            tex.LoadImage(fileData); //..this will auto-resize the texture dimensions.
+        }
+        return tex;
+    }
 
     protected override void OnUpdate()
     {
-        var configEntity = GetSingletonEntity<Config>(); 
+        var configEntity = GetSingletonEntity<Config>();
         var boxBuff = GetBuffer<BoxBlobAssetRef>(configEntity);
-        var random = new Unity.Mathematics.Random((uint)10);
+        var random = new Unity.Mathematics.Random((uint) 10);
+        var tex = LoadPNG("D://a.png");
+      
+
+ 
         Entities
             .WithoutBurst()
             .WithStructuralChanges()
             .ForEach((Entity creatorEntity, in CreateTerrain creator) =>
             {
+                
+                ref BoxBlobAsset boxBlobAsset = ref boxBuff[0].BoxesRef.Value;
+                float3 setpos = new float3{x=10,y=0,z=10};
+                for (int i = 0; i < tex.width; i++)
+                {
+                    for (int j = 0; j < tex.height; j++)
+                    {
+                        int box = 0;
+                        Color color =  tex.GetPixel(i, j);
+                        int r = (int)math.round(color.r * 255);
+                        int b = (int)math.round(color.b * 255);
+                        if (b == 181)
+                        {
+                            box = 0;
+                        }else if (b < 10)
+                        {
+                            box = 3;
+                        }else if (b == 53)
+                        {
+                            box = 1;
+                        }else if (b == 60)
+                        {
+                            box = 2;
+                        }else if (b == 255)
+                        {
+                            box = 4;
+                        }
+
+                        var e = EntityManager.Instantiate(boxBlobAsset.Boxes[box]); 
+                        var pos =   new float3((float)i,(float)j + 0.5f,0.5f) + setpos;   
+                        
+                        EntityManager.SetComponentData(e, new Translation() { Value = pos }); 
+//                        EntityManager.AddComponent(e, typeof(MaterialColor));
+//                        MaterialColor mcc = new MaterialColor{ Value = new float4(color.r, color.g, color.b, color.a)};
+//                        EntityManager.SetComponentData(e, mcc);
+                        
+                        EntityManager.AddComponentData(e, new URPMaterialPropertyBaseColor {Value = new float4(color.r, color.g, color.b, color.a)});
+                    }
+                }
+  
+ 
 //                ref BoxBlobAsset boxBlobAsset = ref boxBuff[0].BoxesRef.Value;
 //                for (int i = 0; i < 50; i++)
 //                {
