@@ -78,8 +78,7 @@ public class CharacterGunAuthoring : MonoBehaviour, IDeclareReferencedPrefabs, I
             {
                 var bullet = Bullets[i];
                 entityArr[i] = conversionSystem.GetPrimaryEntity(bullet);
-            }
-            Debug.Log("fffffffxx:"+boxBlobAsset.Boxes.Length);
+            } 
 
             BlobAssetReference<BoxBlobAsset> boxBlobAssetRef =
                 blobBuilder.CreateBlobAssetReference<BoxBlobAsset>(Allocator.Persistent);

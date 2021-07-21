@@ -130,7 +130,7 @@ class SmoothlyTrackCameraTarget : SystemBase
                 var rayInput = new BRaycastInput
                 {
                     Start = newPositionTo,
-                    End = newPositionTo + newForward * 6,
+                    End = newPositionTo + newForward * 20,
                 };
 
                 float3 castPos = float3.zero;
