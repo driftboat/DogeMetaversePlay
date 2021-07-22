@@ -7,9 +7,12 @@ using UnityEngine;
 public struct BPhysicsWorld : IDisposable
 {
     public NativeHashMap<int3, BBody> m_posBBodyMap;
-    
-    
-    
+
+    public BPhysicsWorld(int initBBodyCap)
+    {
+        m_posBBodyMap = new NativeHashMap<int3, BBody>(initBBodyCap, Allocator.Persistent);
+    }
+
     public void Dispose()
     {
         if (m_posBBodyMap.IsCreated)

@@ -1,14 +1,8 @@
-using System;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
-using Unity.Physics;
-using Unity.Physics.Extensions;
-using Unity.Physics.GraphicsIntegration;
-using Unity.Physics.Systems;
 using Unity.Transforms;
 using UnityEngine;
-using RaycastHit = Unity.Physics.RaycastHit;
 
 // Camera Utility to smoothly track a specified target from a specified location
 // Camera location and target are interpolated each frame to remove overly sharp transitions
@@ -59,23 +53,15 @@ class SmoothlyTrackCameraTarget : SystemBase
     {
     }
 
-    BuildBPhysicsWorld m_BuildPhysicsWorld;
-    RecordMostRecentFixedTime m_RecordMostRecentFixedTime;
-    EntityQuery m_CharacterGunInputQuery;
-    private CollisionFilter _collisionFilter; 
+    BuildBPhysicsWorldSystem _mBuildPhysicsWorldSystem; 
+    EntityQuery m_CharacterGunInputQuery; 
     
     protected override void OnCreate()
     {
         base.OnCreate();
-        m_BuildPhysicsWorld = World.GetExistingSystem<BuildBPhysicsWorld>();
-        m_RecordMostRecentFixedTime = World.GetExistingSystem<RecordMostRecentFixedTime>();
+        _mBuildPhysicsWorldSystem = World.GetExistingSystem<BuildBPhysicsWorldSystem>(); 
         m_CharacterGunInputQuery = GetEntityQuery(typeof(CharacterGunInput));
-        _collisionFilter = new CollisionFilter
-        {
-            BelongsTo = 0xffffffff,
-            CollidesWith = 1,
-            GroupIndex = 0
-        };
+     
         
     }
 
@@ -96,9 +82,8 @@ class SmoothlyTrackCameraTarget : SystemBase
         commandBuffer.Playback(EntityManager);
         commandBuffer.Dispose();
 
-        BPhysicsWorld world = m_BuildPhysicsWorld.PhysicsWorld;
-
-        var timeAhead = (float) (Time.ElapsedTime - m_RecordMostRecentFixedTime.MostRecentElapsedTime);
+        BPhysicsWorld world = _mBuildPhysicsWorldSystem.PhysicsWorld;
+ 
         var input = GetSingleton<CharacterGunInput>();
 
         Entities

@@ -6,16 +6,21 @@ using Unity.Transforms;
 
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
 [AlwaysUpdateSystem]
-public class BuildBPhysicsWorld:SystemBase
+public class BuildBPhysicsWorldSystem:SystemBase
 {
-    public BPhysicsWorld PhysicsWorld = new BPhysicsWorld();
+    public BPhysicsWorld PhysicsWorld = new BPhysicsWorld(0);
     EndFixedStepSimulationEntityCommandBufferSystem m_CommandBufferSystem;
     
     protected override void OnCreate()
     {
         base.OnCreate();
-        m_CommandBufferSystem = World.GetOrCreateSystem<EndFixedStepSimulationEntityCommandBufferSystem>();
-        PhysicsWorld.m_posBBodyMap = new NativeHashMap<int3, BBody>(0, Allocator.Persistent);
+        m_CommandBufferSystem = World.GetOrCreateSystem<EndFixedStepSimulationEntityCommandBufferSystem>(); 
+    }
+
+    protected override void OnDestroy()
+    {
+        base.OnDestroy();
+        PhysicsWorld.Dispose();
     }
 
     protected override void OnUpdate()

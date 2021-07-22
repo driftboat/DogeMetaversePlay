@@ -1,10 +1,8 @@
 using System.Collections.Generic;
-using System.Linq;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using Unity.Physics;
 using UnityEngine;
 
 public struct CharacterGun : IComponentData
@@ -113,12 +111,12 @@ public class CharacterGunAuthoring : MonoBehaviour, IDeclareReferencedPrefabs, I
 public class CharacterGunOneToManyInputSystem : SystemBase
 {
     EntityCommandBufferSystem m_EntityCommandBufferSystem;
-    BuildBPhysicsWorld m_BuildPhysicsWorld;
+    BuildBPhysicsWorldSystem _mBuildPhysicsWorldSystem;
     protected override void OnCreate()
     {
         base.OnCreate();
         m_EntityCommandBufferSystem = World.GetOrCreateSystem<EndFixedStepSimulationEntityCommandBufferSystem>();
-        m_BuildPhysicsWorld = World.GetExistingSystem<BuildBPhysicsWorld>();
+        _mBuildPhysicsWorldSystem = World.GetExistingSystem<BuildBPhysicsWorldSystem>();
     }
   
 
@@ -267,7 +265,7 @@ public class CharacterGunOneToManyInputSystem : SystemBase
         Dependency.Complete();
         foreach (var pos in removePosArr)
         {
-            m_BuildPhysicsWorld.PhysicsWorld.m_posBBodyMap.Remove(pos);
+            _mBuildPhysicsWorldSystem.PhysicsWorld.m_posBBodyMap.Remove(pos);
         }
 
         removePosArr.Dispose();
