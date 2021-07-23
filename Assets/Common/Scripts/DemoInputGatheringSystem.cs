@@ -58,11 +58,17 @@ class DemoInputGatheringSystem : SystemBase
     void InputActions.ICharacterControllerActions.OnFire(InputAction.CallbackContext context) => m_CharacterFiring = context.ReadValue<float>();
     
     void InputActions.ICharacterControllerActions.OnPlace(InputAction.CallbackContext context) => m_CharacterPlacing = context.ReadValue<float>();
-    void InputActions.ICharacterControllerActions.OnJump(InputAction.CallbackContext context) { if (context.started) m_CharacterJumped = true; }
+
+    void InputActions.ICharacterControllerActions.OnJump(InputAction.CallbackContext context)
+    {
+        if (context.started) m_CharacterJumped = true;
+        if (context.canceled) m_CharacterJumped = false;
+    }
 
     void InputActions.ICharacterControllerActions.OnFall(InputAction.CallbackContext context)
     {
         if (context.started) m_CharacterFalled = true;
+        if (context.canceled) m_CharacterFalled = false;
     }
 
     void InputActions.ICharacterControllerActions.OnBoxSelect(InputAction.CallbackContext context)
@@ -101,8 +107,8 @@ class DemoInputGatheringSystem : SystemBase
         cg.BoxSelect = m_CharacterBoxSelect.y;
         m_CharacterGunInputQuery.SetSingleton(cg);
 
-        m_CharacterJumped = false;
-        m_CharacterFalled = false;
+        //m_CharacterJumped = false;
+        //m_CharacterFalled = false;
 
       
 

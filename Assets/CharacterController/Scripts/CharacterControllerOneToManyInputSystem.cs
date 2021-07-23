@@ -20,8 +20,16 @@ public class CharacterControllerOneToManyInputSystem : SystemBase
                 // jump request may not be processed on this frame, so record it rather than matching input state
                 if (input.Jumped != 0)
                     ccData.Input.Jumped = 1;
+                else
+                {
+                    ccData.Input.Jumped = 0;
+                }
                 if (input.Falled != 0)
                     ccData.Input.Falled = 1;
+                else
+                {
+                    ccData.Input.Falled = 0;
+                }
             }
             ).ScheduleParallel();
     }

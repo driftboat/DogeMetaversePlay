@@ -10,7 +10,7 @@ public class ScreenshotCapture : MonoBehaviour
  
     private void LateUpdate() 
     { 
-        if (Input.GetKeyDown(KeyCode.S) && !screenShotLock) 
+        if (Input.GetKeyDown(KeyCode.T) && !screenShotLock) 
         { 
             screenShotLock = true; 
             StartCoroutine(SaveScreenshot()); 

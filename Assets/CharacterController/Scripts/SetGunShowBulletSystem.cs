@@ -19,10 +19,11 @@ public class SetGunShowBulletSystem : SystemBase
             .WithName("SetGunShowBulletJob")
             .WithoutBurst()
             .ForEach(
-                (Entity entity, int entityInQueryIndex, in GunShowBox gunShowBox ) =>
+                (Entity entity,  int entityInQueryIndex, in GunShowBox gunShowBox ) =>
                 {
                     var characterGun =  EntityManager.GetComponentData<CharacterGun>(gunShowBox.Gun);
                     characterGun.ShowBullet = entity;
+                    
                     commandBufferParallel.SetComponent<CharacterGun>( gunShowBox.Gun, characterGun);
                     commandBufferParallel.RemoveComponent<GunShowBox>(  entity); 
                 }

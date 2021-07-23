@@ -306,8 +306,8 @@ public class CharacterControllerSystem : SystemBase
                 float vertical = ccInternalData.Input.Movement.y;
                 bool jumpRequested = ccInternalData.Input.Jumped != 0;
                 bool fallRequest = ccInternalData.Input.Falled != 0;
-                ccInternalData.Input.Falled = 0;
-                ccInternalData.Input.Jumped = 0; // "consume" the event
+//                ccInternalData.Input.Falled = 0;
+//                ccInternalData.Input.Jumped = 0; // "consume" the event
                 bool haveInput = (math.abs(horizontal) > float.Epsilon) || (math.abs(vertical) > float.Epsilon);
                 if (haveInput)
                 {
