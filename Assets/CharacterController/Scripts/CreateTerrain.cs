@@ -17,7 +17,11 @@ public class InitTerrainSystem : SystemBase
     private Texture2D dogeTexture;
     protected override void OnCreate()
     {
-        dogeTexture = LoadPNG("D://doge30.png");
+        #if UNITY_EDITOR
+        dogeTexture = LoadPNG(Application.dataPath + "/../Images/doge30.png");
+        #else
+        dogeTexture = LoadPNG("doge30.png");
+        #endif
         RequireForUpdate(GetEntityQuery(new EntityQueryDesc
         {
             All = new ComponentType[]
