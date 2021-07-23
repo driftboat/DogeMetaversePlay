@@ -14,8 +14,10 @@ public struct CreateTerrain : IComponentData
 [UpdateInGroup(typeof(InitializationSystemGroup))]
 public class InitTerrainSystem : SystemBase
 {
+    private Texture2D dogeTexture;
     protected override void OnCreate()
     {
+        dogeTexture = LoadPNG("D://doge30.png");
         RequireForUpdate(GetEntityQuery(new EntityQueryDesc
         {
             All = new ComponentType[]
@@ -58,8 +60,8 @@ public class InitTerrainSystem : SystemBase
         var configEntity = GetSingletonEntity<Config>();
         var boxBuff = GetBuffer<BoxBlobAssetRef>(configEntity);
         var random = new Unity.Mathematics.Random((uint) 10);
-        var tex = LoadPNG("D://a.png");
-      
+    
+        var tex = dogeTexture;
 
  
         Entities
@@ -70,6 +72,7 @@ public class InitTerrainSystem : SystemBase
                 
                 ref BoxBlobAsset boxBlobAsset = ref boxBuff[0].BoxesRef.Value;
                 float3 setpos = new float3{x=10.5f,y=0.5f,z=10.5f};
+                
                 for (int i = 0; i < tex.width; i++)
                 {
                     for (int j = 0; j < tex.height; j++)
