@@ -2,7 +2,7 @@
 DogeMetaversePlay is a  sandbox  game based on Unity DOTs
 
 # World
-Each world is based on a map of 65536 plots of land (256*256), each land is 50*50*512, Land is the physical space in the metaverse that players use to create games . The land is used to publish your game . Every piece of land has a set of pre-built terrain, but it can be transformed and modified by the user who owns it (or other players they invite). 
+Each world is based on a map of 65536 plots of land (256x256), each land is 50*50*512, Land is the physical space in the metaverse that players use to create games . The land is used to publish your game . Every piece of land has a set of pre-built terrain, but it can be transformed and modified by the user who owns it (or other players they invite). 
 
 # Current Systems
 ![Screenshot](./Docs/Images/systems.png)
