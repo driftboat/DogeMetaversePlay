@@ -8,6 +8,10 @@ Each world is based on a map of 65536 plots of land (256x256), each land is 50x5
 # Current Systems
 ![Screenshot](./Docs/Images/systems.png)
 
+## UpdateLandSystem
+- [x] Add "CreateTerrain" entity when player enter land
+- [ ] Add "RemoveTerrain" entity when player leave land
+
 ## InitTerrainSystem
 - [ ] Load or init Lands.
 
@@ -30,6 +34,9 @@ Each world is based on a map of 65536 plots of land (256x256), each land is 50x5
 
 ## Save System
 - [ ] Save lands
+
+## RemoveTerrain System
+- [ ] Remove lands
 
 ## Image wall generate system
 Create wall from image
