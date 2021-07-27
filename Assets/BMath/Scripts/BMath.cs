@@ -45,4 +45,115 @@ public class BMath
 
     }
 
+    public static float3 GetWorldStartPos(int worldId)
+    {
+        int worldIndex = worldId - 1;
+        int worldx = worldIndex / 3;
+        int worldy = worldIndex % 3;
+        return new float3(worldx*256*50,0,worldy*256*50);
+    }
+
+    public static float3 GetLandOffsetPos(int landx, int landy)
+    {
+        return new float3(landx*50,0,landy*50);
+    }
+
+    public static int3 WorldPosToLand(float3 pos)
+    {
+        int worldx = (int)pos.x / (256*50);
+        int worldy = (int)pos.z / (256*50); 
+        worldx = math.min(math.max(worldx, 0), 2);
+        worldy = math.min(math.max(worldy, 0), 2);
+        int worldId = worldy * 3 + worldx + 1;
+        int landx = (int)pos.x / 50 % 256;
+        int landy = (int)pos.z / 50 % 256;
+        return new int3(worldId,landx,landy);
+    }
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="worldId"></param>
+    /// <param name="landx"></param>
+    /// <param name="landy"></param>
+    /// <param name="dir">
+    ///  1 right 2 top right 3 top 4 top left 5 left 6 bottom left  7 bottom 8 bottom right
+    /// </param>
+    /// <returns></returns>
+    public static int3 GetLandNearBy(int worldId, int landx, int landy, int dir)
+    {
+        int3 nearby = int3.zero;
+        int worldIndex = worldId - 1;
+        int worldX = worldIndex % 3;
+        int worldY = worldIndex / 3;
+        if (dir == 1)
+        {
+            nearby.y = landx + 1;
+        }
+        else if (dir == 2)
+        {
+            nearby.y = landx + 1;
+            nearby.z = landy + 1;
+        }
+        else if (dir == 3)
+        {
+            nearby.z = landy + 1;
+        }
+        else if (dir == 4)
+        {
+            nearby.y = landx - 1;
+            nearby.z = landy + 1;
+        }
+        else if (dir == 5)
+        {
+            nearby.y = landx - 1; 
+        }
+        else if (dir == 6)
+        {
+            nearby.y = landx - 1; 
+            nearby.z = landy - 1;
+        } 
+        else if (dir == 7)
+        {
+            nearby.z = landy - 1;
+        } 
+        else if (dir == 8)
+        {
+            nearby.y = landx + 1; 
+            nearby.z = landy - 1;
+        }
+
+        if (nearby.y > 255)
+        {
+            worldX += 1;
+            nearby.y -= 256;
+        }
+
+        if (nearby.z > 255)
+        {
+            worldY += 1;
+            nearby.z -= 256;
+        }
+
+        if (nearby.y < 0)
+        {
+            worldX -= 1;
+            nearby.y += 256;
+        }
+
+        if (nearby.z < 0)
+        {
+            worldY -= 1;
+            nearby.z += 256;
+        }
+
+        if (worldX < 0 || worldX > 2 || worldY < 0 || worldY > 2)
+        {
+            return int3.zero;
+        }
+
+        nearby.x = worldY * 3 + worldX + 1;
+
+        return nearby;
+    }
+
 }

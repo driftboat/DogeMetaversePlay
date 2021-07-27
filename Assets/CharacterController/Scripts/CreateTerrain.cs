@@ -1,4 +1,5 @@
 using System.IO;
+using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
 using Unity.Mathematics;
@@ -13,10 +14,17 @@ public struct CreateTerrain : IComponentData
     public int landPosY;
 }
 
+
+
 [UpdateInGroup(typeof(InitializationSystemGroup))]
+[UpdateAfter(typeof(UpdateLandSystem))]
 public class InitTerrainSystem : SystemBase
 {
     private Texture2D dogeTexture;
+    private EndInitializationEntityCommandBufferSystem m_CommandBufferSystem;
+    private NativeArray<float3> dogeTextureColors;
+    private int dogeTextureWidth;
+    private int dogeTextureHeight;
     protected override void OnCreate()
     {
         #if UNITY_EDITOR
@@ -24,6 +32,22 @@ public class InitTerrainSystem : SystemBase
         #else
         dogeTexture = LoadPNG("doge30.png");
         #endif
+        dogeTextureWidth = dogeTexture.width;
+        dogeTextureHeight = dogeTexture.height;
+        dogeTextureColors = new NativeArray<float3>(dogeTextureWidth*dogeTextureHeight, Allocator.Persistent);
+
+
+        for (int i = 0; i < dogeTextureWidth; i++)
+        {
+            for (int j = 0; j < dogeTextureHeight; j++)
+            {
+                int box = 0;
+                Color color = dogeTexture.GetPixel(i, j);
+             
+                dogeTextureColors[j * dogeTextureWidth + i] = new float3(color.r, color.g, color.b);
+            }
+        }
+
         RequireForUpdate(GetEntityQuery(new EntityQueryDesc
         {
             All = new ComponentType[]
@@ -31,6 +55,7 @@ public class InitTerrainSystem : SystemBase
                 typeof(CreateTerrain)
             }
         }));
+        m_CommandBufferSystem =  World.GetOrCreateSystem<EndInitializationEntityCommandBufferSystem>();
     }
 
     static float noiseWithParam(float2 pos, int octaves, float persistence, float lacunarity)
@@ -63,98 +88,39 @@ public class InitTerrainSystem : SystemBase
 
     protected override void OnUpdate()
     {
+        var commandBuffer = m_CommandBufferSystem.CreateCommandBuffer().AsParallelWriter();
         var configEntity = GetSingletonEntity<Config>();
-        var boxBuff = GetBuffer<BoxBlobAssetRef>(configEntity);
-        var random = new Unity.Mathematics.Random((uint) 10);
-    
-        var tex = dogeTexture;
-
  
+        var boxBuff = GetBuffer<BoxBlobAssetRef>(configEntity);
+        var colorW = dogeTextureWidth;
+        var colorH = dogeTextureHeight;
+        var colors = dogeTextureColors;
         Entities
-            .WithoutBurst()
-            .WithStructuralChanges()
-            .ForEach((Entity creatorEntity, in CreateTerrain creator) =>
+            .WithName("CreateTerrainJob")
+            .WithoutBurst() 
+            .WithReadOnly(boxBuff)
+            .WithReadOnly(colors)
+            .ForEach((Entity creatorEntity, int entityInQueryIndex, in CreateTerrain creator) =>
             {
-                
+                float3 landPos  = BMath.GetWorldStartPos(creator.worldId) + BMath.GetLandOffsetPos(creator.landPosX,creator.landPosY);
+                float3 setpos = landPos + new float3{x=10.5f,y=0.5f,z=10.5f};
                 ref BoxBlobAsset boxBlobAsset = ref boxBuff[0].BoxesRef.Value;
-                float3 setpos = new float3{x=10.5f,y=0.5f,z=10.5f};
-                
-                for (int i = 0; i < tex.width; i++)
+                for (int i = 0; i < colorW; i++)
                 {
-                    for (int j = 0; j < tex.height; j++)
+                    for (int j = 0; j < colorH; j++)
                     {
                         int box = 0;
-                        Color color =  tex.GetPixel(i, j);
-                        int r = (int)math.round(color.r * 255);
-                        int b = (int)math.round(color.b * 255);
-                        if (b == 181)
-                        {
-                            box = 0;
-                        }else if (b < 10)
-                        {
-                            box = 3;
-                        }else if (b == 53)
-                        {
-                            box = 1;
-                        }else if (b == 60)
-                        {
-                            box = 2;
-                        }else if (b == 255)
-                        {
-                            box = 4;
-                        }
-
-                        var e = EntityManager.Instantiate(boxBlobAsset.Boxes[box]); 
-                        var pos =   new float3((float)i,(float)j  ,0) + setpos;   
+                        float3 color =  colors[j*colorW + i];
                         
-                        EntityManager.SetComponentData(e, new Translation() { Value = pos }); 
-//                        EntityManager.AddComponent(e, typeof(MaterialColor));
-//                        MaterialColor mcc = new MaterialColor{ Value = new float4(color.r, color.g, color.b, color.a)};
-//                        EntityManager.SetComponentData(e, mcc);
-                        
-                        EntityManager.AddComponentData(e, new URPMaterialPropertyBaseColor {Value = new float4(color.r, color.g, color.b, color.a)});
+                        var e =  commandBuffer.Instantiate(entityInQueryIndex,boxBlobAsset.Boxes[box]);  
+                        var pos =   new float3((float)i,(float)j  ,0) + setpos;
+                        commandBuffer.SetComponent(entityInQueryIndex,e, new Translation() { Value = pos });
+                        commandBuffer.AddComponent(entityInQueryIndex,e, new URPMaterialPropertyBaseColor {Value = new float4(color.x, color.y, color.z, 1)});
                     }
                 }
-  
- 
-//                ref BoxBlobAsset boxBlobAsset = ref boxBuff[0].BoxesRef.Value;
-//                for (int i = 0; i < 50; i++)
-//                {
-//                    for (int j = 0; j < 50; j++)
-//                    {
-//                        var n = noiseWithParam(new float2(i/100.0f, j/100.0f),4,0.5f,2);
-//                        
-//                        //var s = noiseWithParam(new float2(-i/100.0f, -j/100.0f),4,0.5f,2);
-//                        n = math.remap(-1, 1, 0, 1, n);
-//                       // int height = (int)math.round(20 + 10*n); 
-//                       int height = 1;
-//                        for (int k = 0; k < height; k++)
-//                        {
-//                            int box = 2;
-//             
-//
-//                            if (k == height - 1)
-//                            {
-//                                  box = 0;
-//                                  if (height > 23)
-//                                  {
-//                                      box = 1;
-//                                  }
-//                            }
-//                            
-//
-//                            float3 pos = new float3(i+0.5f,k+0.5f,j+0.5f);
-//               
-//                            var e = EntityManager.Instantiate(boxBlobAsset.Boxes[box]);  
-//                            Rotation rotation = new Rotation {Value = quaternion.identity}; 
-//                            EntityManager.SetComponentData(e, new Translation() { Value = pos }); 
-//                        }
-//                    }
-//                }
-// 
-               
-
-                EntityManager.DestroyEntity(creatorEntity);
-            }).Run();
+                
+                commandBuffer.DestroyEntity(entityInQueryIndex,creatorEntity);
+            }).ScheduleParallel();
+        m_CommandBufferSystem.AddJobHandleForProducer(Dependency);
     }
 }
