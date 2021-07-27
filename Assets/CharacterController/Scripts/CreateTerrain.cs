@@ -8,7 +8,9 @@ using Unity.Transforms;
 [GenerateAuthoringComponent]
 public struct CreateTerrain : IComponentData
 {
- 
+    public int worldId;
+    public int landPosX;
+    public int landPosY;
 }
 
 [UpdateInGroup(typeof(InitializationSystemGroup))]
