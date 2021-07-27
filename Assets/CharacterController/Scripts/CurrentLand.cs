@@ -1,16 +1,15 @@
 using System.IO;
+using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
 using Unity.Mathematics;
 using Unity.Rendering;
 using Unity.Transforms;
-
-[GenerateAuthoringComponent]
-public struct CurrentLand : IComponentData
+ 
+public struct LandLoader : IComponentData
 {
-    public int worldId;
-    public int landPosX;
-    public int landPosY;
+    public Land CurrentLand; 
+    
 }
 
 
@@ -18,11 +17,16 @@ public struct CurrentLand : IComponentData
 [UpdateInGroup(typeof(InitializationSystemGroup))]
 public class UpdateLandSystem : SystemBase
 {
+
     protected override void OnUpdate()
     {
-        var curLand = GetSingleton<CurrentLand>();
- 
-        Entities.WithName("characterLandCheckJob").WithStructuralChanges().ForEach((Entity playerEntity, in Translation translation,
+        var landLoaderEntity = GetSingletonEntity<LandLoader>();
+        var landLoader = GetComponent<LandLoader>(landLoaderEntity);
+        var landBuffer = GetBuffer<DynamicLand>(landLoaderEntity);
+        
+        var ecb = new EntityCommandBuffer(Allocator.Temp);
+        var loadedLandBuffer = landBuffer.Reinterpret<Land>();
+        Entities.WithName("characterLandCheckJob").WithoutBurst().ForEach((Entity playerEntity, in Translation translation,
             in CharacterControllerComponentData characterControllerComponentData) =>
         {
             float3 playerPos = translation.Value;
@@ -31,28 +35,57 @@ public class UpdateLandSystem : SystemBase
             int landx = land.y;
             int landy = land.z;
  
-            if (curLand.worldId != worldId || curLand.landPosX != landx || curLand.landPosY != landy)
+            if (math.any(landLoader.CurrentLand.LandPos != land))
             {
+                bool exist = false;
                 Debug.Log("land change:"+worldId + "," + landx + "," + landy);
-                Entity entity = EntityManager.CreateEntity(typeof(CreateTerrain));
-                EntityManager.SetComponentData(entity, new CreateTerrain{worldId = worldId, landPosX = landx, landPosY = landy});
+                exist = false;
+                for (int j = 0; j < loadedLandBuffer.Length; j++)
+                {
+                    var lb = loadedLandBuffer[j];
+                    if (math.all(lb.LandPos == land))
+                    {
+                        exist = true;
+                        break;
+                    }
+                }
+
+                if (!exist)
+                {
+                    var entity = ecb.CreateEntity(); 
+                    ecb.AddComponent(entity, new CreateTerrain{worldId = worldId, landPosX = landx, landPosY = landy});
+                }
                 for (int i = 1; i < 7; i++)
                 {
                    int3 nearBy = BMath.GetLandNearBy(worldId, landx, landy, i);
                    if (math.any(nearBy != int3.zero))
                    {
-                       entity = EntityManager.CreateEntity(typeof(CreateTerrain));
-                       EntityManager.SetComponentData(entity, new CreateTerrain{worldId = nearBy.x, landPosX = nearBy.y, landPosY = nearBy.z});
+                         exist = false;
+                       for (int j = 0; j < loadedLandBuffer.Length; j++)
+                       {
+                           var lb = loadedLandBuffer[j];
+                           if (math.all(lb.LandPos == nearBy))
+                           {
+                               exist = true;
+                               break;
+                           }
+                       }
+
+                       if (!exist)
+                       { 
+                           var entity = ecb.CreateEntity(); 
+                           ecb.AddComponent(entity, new CreateTerrain{worldId = nearBy.x, landPosX = nearBy.y, landPosY = nearBy.z});
+                           loadedLandBuffer.Add(new Land{LandPos = nearBy});
+                       } 
                    }
                 }
 
-
-                curLand.worldId = worldId;
-                curLand.landPosX = landx;
-                curLand.landPosY = landy;
-                SetSingleton<CurrentLand>(curLand);
+                landLoader.CurrentLand.LandPos = land; 
+                SetSingleton<LandLoader>(landLoader);
             }
             
         }).Run();
+        ecb.Playback(EntityManager);
+        ecb.Dispose();
     }
 }
