@@ -7,7 +7,7 @@ using Unity.Rendering;
 using Unity.Transforms;
  
 [GenerateAuthoringComponent]
-public struct CreateTerrain : IComponentData
+public struct CreateLand : IComponentData
 {
     public int worldId;
     public int landPosX;
@@ -18,7 +18,7 @@ public struct CreateTerrain : IComponentData
 
 [UpdateInGroup(typeof(InitializationSystemGroup))]
 [UpdateAfter(typeof(UpdateLandSystem))]
-public class InitTerrainSystem : SystemBase
+public class CreateLandSystem : SystemBase
 {
     private Texture2D dogeTexture;
     private EndInitializationEntityCommandBufferSystem m_CommandBufferSystem;
@@ -52,7 +52,7 @@ public class InitTerrainSystem : SystemBase
         {
             All = new ComponentType[]
             {
-                typeof(CreateTerrain)
+                typeof(CreateLand)
             }
         }));
         m_CommandBufferSystem =  World.GetOrCreateSystem<EndInitializationEntityCommandBufferSystem>();
@@ -100,7 +100,7 @@ public class InitTerrainSystem : SystemBase
             .WithoutBurst() 
             .WithReadOnly(boxBuff)
             .WithReadOnly(colors)
-            .ForEach((Entity creatorEntity, int entityInQueryIndex, in CreateTerrain creator) =>
+            .ForEach((Entity creatorEntity, int entityInQueryIndex, in CreateLand creator) =>
             {
                 float3 landPos  = BMath.GetWorldStartPos(creator.worldId) + BMath.GetLandOffsetPos(creator.landPosX,creator.landPosY);
                 float3 setpos = landPos + new float3{x=10.5f,y=0.5f,z=10.5f};
