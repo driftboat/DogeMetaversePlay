@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -18,7 +19,7 @@ public class LandItem : CollectionItem<Land> {
 
 	public override void SetData (Land data)
 	{
-		 
+		landPosText.text = String.Format("{0}-({1},{2})", data.LandPos.x, data.LandPos.y, data.LandPos.z);
 
-    } 
+	} 
 }

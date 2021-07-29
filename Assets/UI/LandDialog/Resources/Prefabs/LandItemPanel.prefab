@@ -35,7 +35,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
   m_AnchoredPosition: {x: 20, y: -0.000015258789}
-  m_SizeDelta: {x: 20, y: 60}
+  m_SizeDelta: {x: 134.7847, y: 60}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!222 &222004921581476478
 CanvasRenderer:
@@ -72,7 +72,7 @@ MonoBehaviour:
     m_BestFit: 1
     m_MinSize: 2
     m_MaxSize: 40
-    m_Alignment: 4
+    m_Alignment: 3
     m_AlignByGeometry: 0
     m_RichText: 1
     m_HorizontalOverflow: 0
@@ -192,7 +192,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 36a9237d2ae9fc64da2228184c330d20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  landPosText: {fileID: 0}
+  landPosText: {fileID: 114142798780089988}
 --- !u!1 &2600051115562303706
 GameObject:
   m_ObjectHideFlags: 0
