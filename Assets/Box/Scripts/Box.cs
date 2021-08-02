@@ -76,6 +76,8 @@ public class CreateBoxSystem : SystemBase
                 commandBuffer.AddComponent(entityInQueryIndex,e, commonBox);
                 commandBuffer.DestroyEntity(entityInQueryIndex, colorBoxEntity);
             }).ScheduleParallel();
+        
+  
         m_CommandBufferSystem.AddJobHandleForProducer(Dependency);
     }
 }

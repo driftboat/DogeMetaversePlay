@@ -65,7 +65,7 @@ public class SaveLandSystem : SystemBase
                                             var cb = new ColorBoxInLand
                                             {
                                                 Color = box.Color,
-                                                Pos = BMath.WorldPosToLandPos(translation.Value)
+                                                Pos = box.Pos
                                             };
                                             boxWriter.AddNoResize(cb);
                                         
@@ -85,13 +85,8 @@ public class SaveLandSystem : SystemBase
 
 
 
-                    var queryDescription = new EntityQueryDesc
-                    {
-                        None = new ComponentType[]
-                            {ComponentType.ReadOnly<Translation>(), ComponentType.ReadOnly<BoxType>()},
-                        All = new ComponentType[] {ComponentType.ReadOnly<URPMaterialPropertyBaseColor>()}
-                    };
-                    entityQuery = GetEntityQuery(queryDescription);
+                    entityQuery = GetEntityQuery(ComponentType.ReadOnly<CommonBox>(),
+                        ComponentType.ReadOnly<Translation>());
                     entityCount = entityQuery.CalculateEntityCount();
 
                     if (entityCount > 0)
@@ -104,25 +99,23 @@ public class SaveLandSystem : SystemBase
                             .WithNone<URPMaterialPropertyBaseColor>()
                             .WithBurst()
                             .ForEach(
-                                (Entity entity, int entityInQueryIndex, in Translation translation, in BoxType boxType) =>
+                                (Entity entity, int entityInQueryIndex, in Translation translation, in CommonBox box) =>
                                 {
                                     var landPos = BMath.WorldPosToLand(translation.Value);
                                     if (math.all(landPos == landToSave.LandPos))
                                     {
-                                        if (boxType.boxType != 1)
-                                        {
+                                         
                                             var cb = new CommonBoxInLand
                                             {
-                                                BoxType = boxType.boxType, Pos = BMath.WorldPosToLandPos(translation.Value)
+                                                BoxType = box.BoxType, Pos = box.Pos
                                             };
                                             boxWriter.AddNoResize(cb);
-                                        }
+                                        
                                     }
                                 }
                             ).ScheduleParallel();
 
-                  
-                        var boxCount = commonBoxes.Length;
+                        Dependency.Complete();
                         Dependency.Complete();
                         var data = commonBoxes.ToArray(Allocator.Temp).ToRawBytes();
                         binaryWriter.Write(commonBoxes.Length);

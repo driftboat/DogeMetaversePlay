@@ -194,13 +194,31 @@ public class CharacterGunOneToManyInputSystem : SystemBase
                     {
                         if (gun.Bullet != null &&  !math.all(input.GenGrid == BMath.nagtiveUnit) )
                         {
-                            var e = commandBuffer.Instantiate(entityInQueryIndex, gun.Bullet);
-                            var pos = input.GenGrid + new float3(0.5f,0.5f,0.5f);  
-                            Translation position = new Translation {Value = pos};
-                            Rotation rotation = new Rotation {Value = quaternion.identity};
-                      
-                            commandBuffer.SetComponent(entityInQueryIndex, e, position);
-                            commandBuffer.SetComponent(entityInQueryIndex, e, rotation);
+                            var boxType = GetComponent<BoxType>(gun.Bullet);
+                            var pos = input.GenGrid + new float3(0.5f,0.5f,0.5f);
+                            var land = BMath.WorldPosToLand(pos);
+                            var landPos = BMath.WorldPosToLandPos(pos);
+                            if (boxType.boxType == 1)
+                            {
+                                var e = commandBuffer.CreateEntity(entityInQueryIndex);
+                                commandBuffer.AddComponent(entityInQueryIndex, e, new ColorBox
+                                {
+                                    Land = land,
+                                    Pos = landPos,
+                                    Color = new float3(0.5f,0.5f,0.5f)
+                                });
+                            }
+                            else
+                            {
+                                var e = commandBuffer.CreateEntity(entityInQueryIndex);
+                                commandBuffer.AddComponent(entityInQueryIndex, e, new CommonBox
+                                {
+                                    BoxType = boxType.boxType,
+                                    Land = land,
+                                    Pos = landPos,
+                                });
+                            }
+
                         }
 
                         gun.Duration = 0;
