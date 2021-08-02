@@ -50,7 +50,7 @@ public class SaveLandSystem : SystemBase
         if (m_existLandToSave)
         {
             String filePath = Application.persistentDataPath +
-                              $"{m_landToSave.LandPos.x}-({m_landToSave.LandPos.y},{m_landToSave.LandPos.z})";
+                              $"{m_landToSave.LandPos.x}_{m_landToSave.LandPos.y}_{m_landToSave.LandPos.z}";
             Debug.Log("===========================save start:" + filePath);
             using (FileStream fileStream = new FileStream(filePath, FileMode.Create))
             {
@@ -87,9 +87,9 @@ public class SaveLandSystem : SystemBase
                                 }
                             ).ScheduleParallel();
                         Dependency.Complete();
-                        var boxCount = colorBoxes.Length;
-                        binaryWriter.Write(boxCount);
-                        binaryWriter.Write(colorBoxes.ToArray(Allocator.Temp).ToRawBytes());  
+                        var data = colorBoxes.ToArray(Allocator.Temp).ToRawBytes();
+                        binaryWriter.Write(data.Length);
+                        binaryWriter.Write(data);  
                     }
                     else
                     {
@@ -137,10 +137,11 @@ public class SaveLandSystem : SystemBase
                   
                         var boxCount = commonBoxes.Length;
                         Dependency.Complete();
-                        binaryWriter.Write(boxCount);
+                        var data = commonBoxes.ToArray(Allocator.Temp).ToRawBytes();
+                        binaryWriter.Write(data.Length);
                      
 
-                        binaryWriter.Write(commonBoxes.ToArray(Allocator.Temp).ToRawBytes()); 
+                        binaryWriter.Write(data); 
                     } else
                     {
                         binaryWriter.Write(0);
