@@ -53,7 +53,7 @@ public class UpdateLandSystem : SystemBase
                 if (!exist)
                 {
                     var entity = ecb.CreateEntity(); 
-                    ecb.AddComponent(entity, new CreateLand{worldId = worldId, landPosX = landx, landPosY = landy});
+                    ecb.AddComponent(entity, new CreateLand{Land = new int3(worldId, landx, landy)});
                 }
                 for (int i = 1; i < 7; i++)
                 {
@@ -74,7 +74,7 @@ public class UpdateLandSystem : SystemBase
                        if (!exist)
                        { 
                            var entity = ecb.CreateEntity(); 
-                           ecb.AddComponent(entity, new CreateLand{worldId = nearBy.x, landPosX = nearBy.y, landPosY = nearBy.z});
+                           ecb.AddComponent(entity, new CreateLand{ Land = new int3(nearBy.x, nearBy.y, nearBy.z)});
                            loadedLandBuffer.Add(new Land{LandPos = nearBy});
                        } 
                    }

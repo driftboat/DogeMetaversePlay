@@ -9,18 +9,6 @@ using Unity.Rendering;
 using Unity.Transforms;
 using UnityEngine;
 
-public struct ColorBox
-{
-    public float3 Color;
-    public int3 Pos;
-}
-
-public struct CommonBox
-{
-    public short BoxType;
-    public int3 Pos;
-}
-
 public class SaveLandSystem : SystemBase
 {
     private bool m_existLandToSave;
@@ -61,7 +49,7 @@ public class SaveLandSystem : SystemBase
                     var entityCount = entityQuery.CalculateEntityCount();
                     if (entityCount > 0)
                     {
-                        var colorBoxes = new NativeList<ColorBox>(entityCount, Allocator.TempJob);
+                        var colorBoxes = new NativeList<ColorBoxInLand>(entityCount, Allocator.TempJob);
                         var boxWriter = colorBoxes.AsParallelWriter();
                         var landToSave = m_landToSave; 
                         Entities
@@ -76,7 +64,7 @@ public class SaveLandSystem : SystemBase
                                     {
                                         if (boxType.boxType == 1)
                                         {
-                                            var cb = new ColorBox
+                                            var cb = new ColorBoxInLand
                                             {
                                                 Color = matColor.Value.xyz,
                                                 Pos = BMath.WorldPosToLandPos(translation.Value)
@@ -110,7 +98,7 @@ public class SaveLandSystem : SystemBase
 
                     if (entityCount > 0)
                     {
-                        var commonBoxes = new NativeList<CommonBox>(entityCount, Allocator.TempJob);
+                        var commonBoxes = new NativeList<CommonBoxInLand>(entityCount, Allocator.TempJob);
                         var boxWriter = commonBoxes.AsParallelWriter();
                         var landToSave = m_landToSave;
                         Entities
@@ -125,7 +113,7 @@ public class SaveLandSystem : SystemBase
                                     {
                                         if (boxType.boxType != 1)
                                         {
-                                            var cb = new CommonBox
+                                            var cb = new CommonBoxInLand
                                             {
                                                 BoxType = boxType.boxType, Pos = BMath.WorldPosToLandPos(translation.Value)
                                             };

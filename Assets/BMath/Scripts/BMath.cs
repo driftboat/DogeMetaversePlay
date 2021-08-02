@@ -70,6 +70,11 @@ public class BMath
         return new int3(worldId,landx,landy);
     }
 
+    public static float3 LandToWorldPos(int3 land)
+    {
+      return   GetWorldStartPos(land.x) + GetLandOffsetPos(land.y, land.z);
+    }
+
     public static int3 WorldPosToLandPos(float3 pos)
     {
         return new int3((int)pos.x%50,(int)pos.y,(int)pos.z%50);
