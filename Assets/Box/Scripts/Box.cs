@@ -63,6 +63,19 @@ public class CreateBoxSystem : SystemBase
                 commandBuffer.AddComponent(entityInQueryIndex,e, colorBox);
                 commandBuffer.DestroyEntity(entityInQueryIndex, colorBoxEntity);
             }).ScheduleParallel();
+        
+        Entities
+            .WithName("CreateCommonBoxJob") 
+            .WithNone<Translation>()
+            .WithReadOnly(boxBuff) 
+            .ForEach((Entity colorBoxEntity, int entityInQueryIndex, in CommonBox commonBox) =>
+            {
+                ref BoxBlobAsset boxBlobAsset = ref boxBuff[0].BoxesRef.Value;
+                var e = commandBuffer.Instantiate(entityInQueryIndex, boxBlobAsset.Boxes[commonBox.BoxType]); 
+                commandBuffer.SetComponent(entityInQueryIndex, e, new Translation() {Value = BMath.LandToWorldPos(commonBox.Land) + commonBox.Pos + new float3(0.5f,0.5f,0.5f)});
+                commandBuffer.AddComponent(entityInQueryIndex,e, commonBox);
+                commandBuffer.DestroyEntity(entityInQueryIndex, colorBoxEntity);
+            }).ScheduleParallel();
         m_CommandBufferSystem.AddJobHandleForProducer(Dependency);
     }
 }
