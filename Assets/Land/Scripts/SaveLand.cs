@@ -44,8 +44,8 @@ public class SaveLandSystem : SystemBase
             {
                 using (BinaryWriter binaryWriter = new BinaryWriter(fileStream))
                 {
-                    EntityQuery entityQuery = GetEntityQuery(ComponentType.ReadOnly<URPMaterialPropertyBaseColor>(),
-                        ComponentType.ReadOnly<Translation>(), ComponentType.ReadOnly<BoxType>());
+                    EntityQuery entityQuery = GetEntityQuery(ComponentType.ReadOnly<ColorBox>(),
+                        ComponentType.ReadOnly<Translation>());
                     var entityCount = entityQuery.CalculateEntityCount();
                     if (entityCount > 0)
                     {
@@ -56,21 +56,19 @@ public class SaveLandSystem : SystemBase
                             .WithName("GetLandColorBoxJob")
                             .WithBurst()
                             .ForEach(
-                                (Entity entity, int entityInQueryIndex, in URPMaterialPropertyBaseColor matColor,
-                                    in Translation translation, in BoxType boxType) =>
+                                (Entity entity, int entityInQueryIndex,
+                                    in Translation translation, in ColorBox box) =>
                                 {
                                     var landPos = BMath.WorldPosToLand(translation.Value);
                                     if (math.all(landPos == landToSave.LandPos))
-                                    {
-                                        if (boxType.boxType == 1)
-                                        {
+                                    { 
                                             var cb = new ColorBoxInLand
                                             {
-                                                Color = matColor.Value.xyz,
+                                                Color = box.Color,
                                                 Pos = BMath.WorldPosToLandPos(translation.Value)
                                             };
                                             boxWriter.AddNoResize(cb);
-                                        }
+                                        
                                     }
                                 }
                             ).ScheduleParallel();

@@ -51,6 +51,7 @@ public class CreateBoxSystem : SystemBase
         var boxBuff = GetBuffer<BoxBlobAssetRef>(configEntity);
         Entities
             .WithName("CreateColorBoxJob") 
+            .WithNone<Translation>()
             .WithReadOnly(boxBuff) 
             .ForEach((Entity colorBoxEntity, int entityInQueryIndex, in ColorBox colorBox) =>
             {
@@ -59,6 +60,7 @@ public class CreateBoxSystem : SystemBase
                 commandBuffer.SetComponent(entityInQueryIndex, e, new Translation() {Value = BMath.LandToWorldPos(colorBox.Land) + colorBox.Pos + new float3(0.5f,0.5f,0.5f)});
                 commandBuffer.AddComponent(entityInQueryIndex, e,
                     new URPMaterialPropertyBaseColor {Value = new float4(colorBox.Color.x, colorBox.Color.y, colorBox.Color.z, 1)});
+                commandBuffer.AddComponent(entityInQueryIndex,e, colorBox);
                 commandBuffer.DestroyEntity(entityInQueryIndex, colorBoxEntity);
             }).ScheduleParallel();
         m_CommandBufferSystem.AddJobHandleForProducer(Dependency);
