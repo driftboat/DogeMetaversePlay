@@ -88,6 +88,7 @@ public class SaveLandSystem : SystemBase
                             ).ScheduleParallel();
                         Dependency.Complete();
                         var data = colorBoxes.ToArray(Allocator.Temp).ToRawBytes();
+                        binaryWriter.Write(colorBoxes.Length);
                         binaryWriter.Write(data.Length);
                         binaryWriter.Write(data);  
                     }
@@ -138,9 +139,8 @@ public class SaveLandSystem : SystemBase
                         var boxCount = commonBoxes.Length;
                         Dependency.Complete();
                         var data = commonBoxes.ToArray(Allocator.Temp).ToRawBytes();
+                        binaryWriter.Write(commonBoxes.Length);
                         binaryWriter.Write(data.Length);
-                     
-
                         binaryWriter.Write(data); 
                     } else
                     {
