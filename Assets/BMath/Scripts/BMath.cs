@@ -69,6 +69,12 @@ public class BMath
         int landy = (int)pos.z / 50 % 256;
         return new int3(worldId,landx,landy);
     }
+
+    public static int3 WorldPosToLandPos(float3 pos)
+    {
+        return new int3((int)pos.x%50,(int)pos.y,(int)pos.z%50);
+    }
+
     /// <summary>
     /// 
     /// </summary>
