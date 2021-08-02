@@ -44,32 +44,6 @@ public class SaveLandSystem : SystemBase
         m_landToSave = land;
     }
 
-    struct WriteColorBoxes : IJobParallelFor
-    {
-        public NativeStream.Writer Writer;
-        [ReadOnly] public NativeArray<ColorBox> Boxes;
-
-        public void Execute(int index)
-        {
-            Writer.BeginForEachIndex(index);
-            Writer.Write(Boxes[index]);
-            Writer.EndForEachIndex();
-        }
-    }
-
-    struct WriteCommonBoxes : IJobParallelFor
-    {
-        public NativeStream.Writer Writer;
-        [ReadOnly] public NativeArray<CommonBox> Boxes;
-
-        public void Execute(int index)
-        {
-            Writer.BeginForEachIndex(index);
-            Writer.Write(Boxes[index]);
-            Writer.EndForEachIndex();
-        }
-    }
-
 
     protected override void OnUpdate()
     {
@@ -115,13 +89,7 @@ public class SaveLandSystem : SystemBase
                         Dependency.Complete();
                         var boxCount = colorBoxes.Length;
                         binaryWriter.Write(boxCount);
-                        NativeStream stream = new NativeStream(boxCount, Allocator.TempJob);
-                        var fillBoxes = new WriteColorBoxes {Writer = stream.AsWriter(), Boxes = colorBoxes.AsArray()};
-                        var jobHandle = fillBoxes.Schedule(boxCount, 32, Dependency);
-                        jobHandle.Complete();
-                        var barr = stream.ToNativeArray<byte>(Allocator.Temp);
-                        binaryWriter.Write(barr.ToArray()); 
-                        stream.Dispose();
+                        binaryWriter.Write(colorBoxes.ToArray(Allocator.Temp).ToRawBytes());  
                     }
                     else
                     {
@@ -170,14 +138,9 @@ public class SaveLandSystem : SystemBase
                         var boxCount = commonBoxes.Length;
                         Dependency.Complete();
                         binaryWriter.Write(boxCount);
-                        var stream = new NativeStream(boxCount, Allocator.TempJob);
-                        var fillCommonBoxes = new WriteCommonBoxes {Writer = stream.AsWriter(), Boxes = commonBoxes.AsArray()};
-                        var jobHandle = fillCommonBoxes.Schedule(boxCount, 32, Dependency);
-                        jobHandle.Complete();
-                        var barr = stream.ToNativeArray<byte>(Allocator.Temp);
+                     
 
-                        binaryWriter.Write(barr.ToArray());
-                        stream.Dispose();
+                        binaryWriter.Write(commonBoxes.ToArray(Allocator.Temp).ToRawBytes()); 
                     } else
                     {
                         binaryWriter.Write(0);
