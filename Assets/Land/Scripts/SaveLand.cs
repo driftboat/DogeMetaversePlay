@@ -154,7 +154,7 @@ public class SaveLandSystem : SystemBase
                                     var landPos = BMath.WorldPosToLand(translation.Value);
                                     if (math.all(landPos == landToSave.LandPos))
                                     {
-                                        if (boxType.boxType == 1)
+                                        if (boxType.boxType != 1)
                                         {
                                             var cb = new CommonBox
                                             {
