@@ -100,7 +100,6 @@ public class CreateLandSystem : SystemBase
 
         public void Execute(int index)
         {
-            Debug.Log("==============read" + index);
             var box = Boxes[index];
             var e = CommandBufferWriter.CreateEntity(index);
             CommandBufferWriter.AddComponent(index, e, new ColorBox
@@ -111,6 +110,27 @@ public class CreateLandSystem : SystemBase
             });
         }
     }
+
+    struct ReadCommonBoxes : IJobParallelFor
+    {
+        public EntityCommandBuffer.ParallelWriter CommandBufferWriter;
+        [ReadOnly] public NativeArray<CommonBoxInLand> Boxes;
+
+        public int3 BoxLand;
+
+        public void Execute(int index)
+        {
+            var box = Boxes[index];
+            var e = CommandBufferWriter.CreateEntity(index);
+            CommandBufferWriter.AddComponent(index, e, new CommonBox
+            {
+                BoxType = box.BoxType,
+                Land = BoxLand,
+                Pos = box.Pos,
+            });
+        }
+    }
+
 
     protected override void OnUpdate()
     {
@@ -128,22 +148,40 @@ public class CreateLandSystem : SystemBase
                                   $"{creator.Land.x}_{creator.Land.y}_{creator.Land.z}";
                 if (File.Exists(filePath))
                 {
-                    Debug.Log("exist:" + creator.Land);
                     EntityManager.DestroyEntity(creatorEntity);
                     using (FileStream fileStream = new FileStream(filePath, FileMode.Open))
                     {
                         using (BinaryReader binaryReader = new BinaryReader(fileStream))
                         {
+                            //--read colorboxes
                             int boxCnt = binaryReader.ReadInt32();
-                            int dataSize = binaryReader.ReadInt32();
-                            var data = binaryReader.ReadBytes(dataSize);
-                            NativeArray<ColorBoxInLand> boxes =
-                                new NativeArray<ColorBoxInLand>(boxCnt, Allocator.TempJob);
-                            boxes.CopyFromRawBytes(data);
-                            var readBoxes = new ReadColorBoxes
-                                {CommandBufferWriter = commandBuffer, Boxes = boxes, BoxLand = creator.Land};
-                            var jobHanlder = readBoxes.Schedule(boxCnt, 32, Dependency);
-                            Dependency = JobHandle.CombineDependencies(Dependency,jobHanlder);
+                            if (boxCnt > 0)
+                            {
+                                int dataSize = binaryReader.ReadInt32();
+                                var data = binaryReader.ReadBytes(dataSize);
+                                NativeArray<ColorBoxInLand> boxes =
+                                    new NativeArray<ColorBoxInLand>(boxCnt, Allocator.TempJob);
+                                boxes.CopyFromRawBytes(data);
+                                var readBoxes = new ReadColorBoxes
+                                    {CommandBufferWriter = commandBuffer, Boxes = boxes, BoxLand = creator.Land};
+                                var jobHanlder = readBoxes.Schedule(boxCnt, 32, Dependency);
+                                Dependency = JobHandle.CombineDependencies(Dependency, jobHanlder);
+                            }
+
+                            //--read commonboxes
+                            boxCnt = binaryReader.ReadInt32();
+                            if (boxCnt > 0)
+                            {
+                                int dataSize = binaryReader.ReadInt32();
+                                var data = binaryReader.ReadBytes(dataSize);
+                                NativeArray<CommonBoxInLand> boxes =
+                                    new NativeArray<CommonBoxInLand>(boxCnt, Allocator.TempJob);
+                                boxes.CopyFromRawBytes(data);
+                                var readBoxes = new ReadCommonBoxes
+                                    {CommandBufferWriter = commandBuffer, Boxes = boxes, BoxLand = creator.Land};
+                                var jobHanlder = readBoxes.Schedule(boxCnt, 32, Dependency);
+                                Dependency = JobHandle.CombineDependencies(Dependency, jobHanlder);
+                            }
                         }
                     }
                 }
