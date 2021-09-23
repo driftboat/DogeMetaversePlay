@@ -94,7 +94,7 @@ public class CreateLandSystem : SystemBase
     struct ReadColorBoxes : IJobParallelFor
     {
         public EntityCommandBuffer.ParallelWriter CommandBufferWriter;
-        [ReadOnly] public NativeArray<ColorBoxInLand> Boxes;
+        [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<ColorBoxInLand> Boxes;
 
         public int3 BoxLand;
 
@@ -114,7 +114,7 @@ public class CreateLandSystem : SystemBase
     struct ReadCommonBoxes : IJobParallelFor
     {
         public EntityCommandBuffer.ParallelWriter CommandBufferWriter;
-        [ReadOnly] public NativeArray<CommonBoxInLand> Boxes;
+        [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<CommonBoxInLand> Boxes;
 
         public int3 BoxLand;
 

@@ -1,5 +1,6 @@
 using System.IO;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using UnityEngine;
 using Unity.Mathematics;
@@ -34,9 +35,11 @@ public class UpdateLandSystem : SystemBase
             int worldId = land.x;
             int landx = land.y;
             int landy = land.z;
- 
+        
             if (math.any(landLoader.CurrentLand.LandPos != land))
             {
+                var showLands = new NativeList<int3>(9, Allocator.Temp);
+                showLands.Add(land);
                 bool exist = false;
                 Debug.Log("land change:"+worldId + "," + landx + "," + landy);
                 exist = false;
@@ -55,12 +58,14 @@ public class UpdateLandSystem : SystemBase
                     var entity = ecb.CreateEntity(); 
                     ecb.AddComponent(entity, new CreateLand{Land = new int3(worldId, landx, landy)});
                 }
-                for (int i = 1; i < 7; i++)
+                for (int i = 1; i <= 8; i++)
                 {
                    int3 nearBy = BMath.GetLandNearBy(worldId, landx, landy, i);
+                  
                    if (math.any(nearBy != int3.zero))
                    {
-                         exist = false;
+                       showLands.Add(nearBy);
+                       exist = false;
                        for (int j = 0; j < loadedLandBuffer.Length; j++)
                        {
                            var lb = loadedLandBuffer[j];
@@ -80,9 +85,22 @@ public class UpdateLandSystem : SystemBase
                    }
                 }
 
+                for (int j = 0; j < loadedLandBuffer.Length; j++)
+                {
+                    var lb = loadedLandBuffer[j];
+                    if (!showLands.Contains(lb.LandPos))
+                    {
+                        loadedLandBuffer.RemoveAt(j);
+                        j--;
+                    }
+                }
+
                 landLoader.CurrentLand.LandPos = land; 
                 SetSingleton<LandLoader>(landLoader);
+                DestoyLandSystem.needDstroy = true;
+                showLands.Dispose();
             }
+            
             
         }).Run();
         ecb.Playback(EntityManager);
