@@ -4,9 +4,14 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.Physics;
+using Unity.Physics.Extensions;
+using Unity.Physics.GraphicsIntegration;
+using Unity.Physics.Systems;
 using Unity.Transforms;
 using UnityEngine;
 using static CharacterControllerUtilities;
+using static Unity.Physics.PhysicsStep;
 
 [Serializable]
 public struct CharacterControllerComponentData : IComponentData
@@ -24,6 +29,7 @@ public struct CharacterControllerComponentData : IComponentData
     public byte AffectsPhysicsBodies;
     public byte RaiseCollisionEvents;
     public byte RaiseTriggerEvents;
+    public byte Mode;//0--play 1--edit
 }
 
 public struct CharacterControllerInput : IComponentData
@@ -33,13 +39,15 @@ public struct CharacterControllerInput : IComponentData
     public int Jumped;
     public int Falled;
 }
- 
+
+[WriteGroup(typeof(PhysicsGraphicalInterpolationBuffer))]
+[WriteGroup(typeof(PhysicsGraphicalSmoothing))]
 public struct CharacterControllerInternalData : IComponentData
 {
     public float CurrentRotationAngle;
     public CharacterSupportState SupportedState;
     public float3 UnsupportedVelocity;
-    public BPhysicsVelocity Velocity;
+    public PhysicsVelocity Velocity;
     public Entity Entity;
     public bool IsJumping;
     public bool IsFalling;
@@ -51,7 +59,7 @@ public struct CharacterControllerInternalData : IComponentData
 public class CharacterControllerAuthoring : MonoBehaviour, IConvertGameObjectToEntity
 {
     // Gravity force applied to the character controller body
-    public float3 Gravity = -9.81f * math.up();
+    public float3 Gravity = Default.Gravity;
 
     // Speed of movement initiated by user input
     public float MovementSpeed = 2.5f;
@@ -91,6 +99,7 @@ public class CharacterControllerAuthoring : MonoBehaviour, IConvertGameObjectToE
     // Whether to raise trigger events
     public bool RaiseTriggerEvents = false;
 
+    public bool EditMode = false;
     void OnEnable() {}
 
     void IConvertGameObjectToEntity.Convert(Entity entity, EntityManager dstManager, GameObjectConversionSystem conversionSystem)
@@ -99,7 +108,7 @@ public class CharacterControllerAuthoring : MonoBehaviour, IConvertGameObjectToE
         {
             var componentData = new CharacterControllerComponentData
             {
-                Gravity = Gravity,
+                Gravity = EditMode? float3.zero : Gravity,
                 MovementSpeed = MovementSpeed,
                 MaxMovementSpeed = MaxMovementSpeed,
                 RotationSpeed = RotationSpeed,
@@ -111,7 +120,8 @@ public class CharacterControllerAuthoring : MonoBehaviour, IConvertGameObjectToE
                 ContactTolerance = ContactTolerance,
                 AffectsPhysicsBodies = (byte)(AffectsPhysicsBodies ? 1 : 0),
                 RaiseCollisionEvents = (byte)(RaiseCollisionEvents ? 1 : 0),
-                RaiseTriggerEvents = (byte)(RaiseTriggerEvents ? 1 : 0)
+                RaiseTriggerEvents = (byte)(RaiseTriggerEvents ? 1 : 0),
+                Mode = (byte)(EditMode? 1 : 0)
             };
             var internalData = new CharacterControllerInternalData
             {
@@ -126,15 +136,46 @@ public class CharacterControllerAuthoring : MonoBehaviour, IConvertGameObjectToE
     }
 }
 
- 
+// override the behavior of BufferInterpolatedRigidBodiesMotion
+[UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
+[UpdateAfter(typeof(BuildPhysicsWorld)), UpdateBefore(typeof(ExportPhysicsWorld))]
+[UpdateAfter(typeof(BufferInterpolatedRigidBodiesMotion)), UpdateBefore(typeof(CharacterControllerSystem))]
+public class BufferInterpolatedCharacterControllerMotion : SystemBase
+{
+    CharacterControllerSystem m_CharacterControllerSystem;
+
+    protected override void OnCreate()
+    {
+        base.OnCreate();
+        m_CharacterControllerSystem = World.GetOrCreateSystem<CharacterControllerSystem>();
+    }
+
+    protected override void OnUpdate()
+    {
+        Dependency = Entities
+            .WithName("UpdateCCInterpolationBuffers")
+            .WithNone<PhysicsExclude>()
+            .WithBurst()
+            .ForEach((ref PhysicsGraphicalInterpolationBuffer interpolationBuffer, in CharacterControllerInternalData ccInternalData, in Translation position, in Rotation orientation) =>
+            {
+                interpolationBuffer = new PhysicsGraphicalInterpolationBuffer
+                {
+                    PreviousTransform = new RigidTransform(orientation.Value, position.Value),
+                    PreviousVelocity = ccInternalData.Velocity,
+                };
+            }).ScheduleParallel(Dependency);
+
+        m_CharacterControllerSystem.AddInputDependency(Dependency);
+    }
+}
 
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
+[UpdateAfter(typeof(ExportPhysicsWorld)), UpdateBefore(typeof(EndFramePhysicsSystem))]
 public class CharacterControllerSystem : SystemBase
 {
     const float k_DefaultTau = 0.4f;
     const float k_DefaultDamping = 0.9f;
 
-    BuildBPhysicsWorldSystem m_BuildPhysicsWorldSystem; 
     JobHandle m_InputDependency;
     public JobHandle OutDependency => Dependency;
 
@@ -147,35 +188,40 @@ public class CharacterControllerSystem : SystemBase
         public float DeltaTime;
 
         [ReadOnly]
-        public BPhysicsWorld PhysicsWorld;
+        public PhysicsWorld PhysicsWorld;
 
         public ComponentTypeHandle<CharacterControllerInternalData> CharacterControllerInternalType;
         public ComponentTypeHandle<Translation> TranslationType;
         public ComponentTypeHandle<Rotation> RotationType;
-        [ReadOnly] public ComponentTypeHandle<CharacterControllerComponentData> CharacterControllerComponentType; 
+        [ReadOnly] public ComponentTypeHandle<CharacterControllerComponentData> CharacterControllerComponentType;
+        [ReadOnly] public ComponentTypeHandle<PhysicsCollider> PhysicsColliderType;
 
         // Stores impulses we wish to apply to dynamic bodies the character is interacting with.
         // This is needed to avoid race conditions when 2 characters are interacting with the
         // same body at the same time.
-       // [NativeDisableParallelForRestriction] public NativeStream.Writer DeferredImpulseWriter;
+        [NativeDisableParallelForRestriction] public NativeStream.Writer DeferredImpulseWriter;
 
         public unsafe void Execute(ArchetypeChunk batchInChunk, int batchIndex)
         {
             var chunkCCData = batchInChunk.GetNativeArray(CharacterControllerComponentType);
-            var chunkCCInternalData = batchInChunk.GetNativeArray(CharacterControllerInternalType); 
+            var chunkCCInternalData = batchInChunk.GetNativeArray(CharacterControllerInternalType);
+            var chunkPhysicsColliderData = batchInChunk.GetNativeArray(PhysicsColliderType);
             var chunkTranslationData = batchInChunk.GetNativeArray(TranslationType);
             var chunkRotationData = batchInChunk.GetNativeArray(RotationType);
 
-    
+   
+            DeferredImpulseWriter.BeginForEachIndex(batchIndex);
 
             for (int i = 0; i < batchInChunk.Count; i++)
             {
                 var ccComponentData = chunkCCData[i];
-                var ccInternalData = chunkCCInternalData[i]; 
+                var ccInternalData = chunkCCInternalData[i];
+                var collider = chunkPhysicsColliderData[i];
                 var position = chunkTranslationData[i];
                 var rotation = chunkRotationData[i];
                 // Collision filter must be valid
-     
+                if (!collider.IsValid || collider.Value.Value.Filter.IsEmpty)
+                    continue;
 
                 var up = math.select(math.up(), -math.normalize(ccComponentData.Gravity),
                     math.lengthsq(ccComponentData.Gravity) > 0f);
@@ -192,7 +238,8 @@ public class CharacterControllerSystem : SystemBase
                     Damping = k_DefaultDamping,
                     SkinWidth = ccComponentData.SkinWidth,
                     ContactTolerance = ccComponentData.ContactTolerance,
-                    MaxSlope = ccComponentData.MaxSlope, 
+                    MaxSlope = ccComponentData.MaxSlope,
+                    RigidBodyIndex = PhysicsWorld.GetRigidBodyIndex(ccInternalData.Entity),
                     CurrentVelocity = ccInternalData.Velocity.Linear,
                     MaxMovementSpeed = ccComponentData.MaxMovementSpeed
                 };
@@ -207,11 +254,9 @@ public class CharacterControllerSystem : SystemBase
 
 
                 // Check support
-//                CheckSupport(ref PhysicsWorld, ref collider, stepInput, transform,
-//                    out ccInternalData.SupportedState, out float3 surfaceNormal, out float3 surfaceVelocity );
+                CheckSupport(ref PhysicsWorld, ref collider, stepInput, transform,
+                    out ccInternalData.SupportedState, out float3 surfaceNormal, out float3 surfaceVelocity );
 
-                float3 surfaceVelocity = stepInput.CurrentVelocity;
-                float3 surfaceNormal = Vector3.up;
                 // User input
                 float3 desiredVelocity = ccInternalData.Velocity.Linear;
                 HandleUserInput(ccComponentData, stepInput.Up, surfaceVelocity, ref ccInternalData, ref desiredVelocity);
@@ -243,32 +288,33 @@ public class CharacterControllerSystem : SystemBase
 
                 // World collision + integrate
                 CollideAndIntegrate(stepInput, ccComponentData.CharacterMass, ccComponentData.AffectsPhysicsBodies != 0,
-                  ref transform, ref ccInternalData.Velocity.Linear);
-                if (desiredVelocity.y > 0 )
+                    collider.ColliderPtr, ref transform, ref ccInternalData.Velocity.Linear, ref DeferredImpulseWriter);
+                if (ccComponentData.Mode == 1)
                 {
-                    if (ccInternalData.ToYPos > -1000 && transform.pos.y > ccInternalData.ToYPos)
+                    if (desiredVelocity.y > 0 )
                     {
-                        transform.pos.y = ccInternalData.ToYPos;
-                        ccInternalData.Velocity.Linear.y = 0;
-                        ccInternalData.ToYPos = -100000;
-                        ccInternalData.IsJumping = false;
-                        ccInternalData.IsFalling = false;
-                        ccInternalData.UnsupportedVelocity = float3.zero;
-                    }
-                }else if (desiredVelocity.y < 0)
-                {
-                    if (ccInternalData.ToYPos > -1000 && transform.pos.y < ccInternalData.ToYPos)
+                        if (ccInternalData.ToYPos > -1000 && transform.pos.y > ccInternalData.ToYPos)
+                        {
+                            transform.pos.y = ccInternalData.ToYPos;
+                            ccInternalData.Velocity.Linear.y = 0;
+                            ccInternalData.ToYPos = -100000;
+                            ccInternalData.IsJumping = false;
+                            ccInternalData.IsFalling = false;
+                            ccInternalData.UnsupportedVelocity = float3.zero;
+                        }
+                    }else if (desiredVelocity.y < 0)
                     {
-                        transform.pos.y = ccInternalData.ToYPos;
-                        ccInternalData.Velocity.Linear.y = 0;
-                        ccInternalData.ToYPos = -100000;
-                        ccInternalData.IsJumping = false;
-                        ccInternalData.IsFalling = false;
-                        ccInternalData.UnsupportedVelocity = float3.zero;
+                        if (ccInternalData.ToYPos > -1000 && transform.pos.y < ccInternalData.ToYPos)
+                        {
+                            transform.pos.y = ccInternalData.ToYPos;
+                            ccInternalData.Velocity.Linear.y = 0;
+                            ccInternalData.ToYPos = -100000;
+                            ccInternalData.IsJumping = false;
+                            ccInternalData.IsFalling = false;
+                            ccInternalData.UnsupportedVelocity = float3.zero;
+                        }
                     }
                 }
-
-               
 
                 // Write back and orientation integration
                 position.Value = transform.pos;
@@ -281,6 +327,8 @@ public class CharacterControllerSystem : SystemBase
                     chunkRotationData[i] = rotation;
                 }
             }
+
+            DeferredImpulseWriter.EndForEachIndex();
         }
 
         private void HandleUserInput(CharacterControllerComponentData ccComponentData, float3 up, float3 surfaceVelocity,
@@ -306,8 +354,6 @@ public class CharacterControllerSystem : SystemBase
                 float vertical = ccInternalData.Input.Movement.y;
                 bool jumpRequested = ccInternalData.Input.Jumped != 0;
                 bool fallRequest = ccInternalData.Input.Falled != 0;
-//                ccInternalData.Input.Falled = 0;
-//                ccInternalData.Input.Jumped = 0; // "consume" the event
                 bool haveInput = (math.abs(horizontal) > float.Epsilon) || (math.abs(vertical) > float.Epsilon);
                 if (haveInput)
                 {
@@ -404,91 +450,98 @@ public class CharacterControllerSystem : SystemBase
         }
  
     }
-//
-//    [BurstCompile]
-//    struct ApplyDefferedPhysicsUpdatesJob : IJob
-//    {
-//        // Chunks can be deallocated at this point
-//        [DeallocateOnJobCompletion] public NativeArray<ArchetypeChunk> Chunks;
-//
-//        public NativeStream.Reader DeferredImpulseReader;
-//
-//        public ComponentDataFromEntity<PhysicsVelocity> PhysicsVelocityData;
-//        public ComponentDataFromEntity<PhysicsMass> PhysicsMassData;
-//        public ComponentDataFromEntity<Translation> TranslationData;
-//        public ComponentDataFromEntity<Rotation> RotationData;
-//
-//        public void Execute()
-//        {
-//            int index = 0;
-//            int maxIndex = DeferredImpulseReader.ForEachCount;
-//            DeferredImpulseReader.BeginForEachIndex(index++);
-//            while (DeferredImpulseReader.RemainingItemCount == 0 && index < maxIndex)
-//            {
-//                DeferredImpulseReader.BeginForEachIndex(index++);
-//            }
-//
-//            while (DeferredImpulseReader.RemainingItemCount > 0)
-//            {
-//                // Read the data
-//                var impulse = DeferredImpulseReader.Read<DeferredCharacterControllerImpulse>();
-//                while (DeferredImpulseReader.RemainingItemCount == 0 && index < maxIndex)
-//                {
-//                    DeferredImpulseReader.BeginForEachIndex(index++);
-//                }
-//
-//                PhysicsVelocity pv = PhysicsVelocityData[impulse.Entity];
-//                PhysicsMass pm = PhysicsMassData[impulse.Entity];
-//                Translation t = TranslationData[impulse.Entity];
-//                Rotation r = RotationData[impulse.Entity];
-//
-//                // Don't apply on kinematic bodies
-//                if (pm.InverseMass > 0.0f)
-//                {
-//                    // Apply impulse
-//                    pv.ApplyImpulse(pm, t, r, impulse.Impulse, impulse.Point);
-//
-//                    // Write back
-//                    PhysicsVelocityData[impulse.Entity] = pv;
-//                }
-//            }
-//        }
-//    }
+
+    [BurstCompile]
+    struct ApplyDefferedPhysicsUpdatesJob : IJob
+    {
+        // Chunks can be deallocated at this point
+        [DeallocateOnJobCompletion] public NativeArray<ArchetypeChunk> Chunks;
+
+        public NativeStream.Reader DeferredImpulseReader;
+
+        public ComponentDataFromEntity<PhysicsVelocity> PhysicsVelocityData;
+        public ComponentDataFromEntity<PhysicsMass> PhysicsMassData;
+        public ComponentDataFromEntity<Translation> TranslationData;
+        public ComponentDataFromEntity<Rotation> RotationData;
+
+        public void Execute()
+        {
+            int index = 0;
+            int maxIndex = DeferredImpulseReader.ForEachCount;
+            DeferredImpulseReader.BeginForEachIndex(index++);
+            while (DeferredImpulseReader.RemainingItemCount == 0 && index < maxIndex)
+            {
+                DeferredImpulseReader.BeginForEachIndex(index++);
+            }
+
+            while (DeferredImpulseReader.RemainingItemCount > 0)
+            {
+                // Read the data
+                var impulse = DeferredImpulseReader.Read<DeferredCharacterControllerImpulse>();
+                while (DeferredImpulseReader.RemainingItemCount == 0 && index < maxIndex)
+                {
+                    DeferredImpulseReader.BeginForEachIndex(index++);
+                }
+
+                PhysicsVelocity pv = PhysicsVelocityData[impulse.Entity];
+                PhysicsMass pm = PhysicsMassData[impulse.Entity];
+                Translation t = TranslationData[impulse.Entity];
+                Rotation r = RotationData[impulse.Entity];
+
+                // Don't apply on kinematic bodies
+                if (pm.InverseMass > 0.0f)
+                {
+                    // Apply impulse
+                    pv.ApplyImpulse(pm, t, r, impulse.Impulse, impulse.Point);
+
+                    // Write back
+                    PhysicsVelocityData[impulse.Entity] = pv;
+                }
+            }
+        }
+    }
 
     // override the behavior of CopyPhysicsVelocityToSmoothing
-//    [BurstCompile]
-//    struct CopyVelocityToGraphicalSmoothingJob : IJobEntityBatch
-//    {
-//        [ReadOnly] public ComponentTypeHandle<CharacterControllerInternalData> CharacterControllerInternalType;
-//        public ComponentTypeHandle<PhysicsGraphicalSmoothing> PhysicsGraphicalSmoothingType;
-//
-//        public void Execute(ArchetypeChunk batchInChunk, int batchIndex)
-//        {
-//            NativeArray<CharacterControllerInternalData> ccInternalDatas = batchInChunk.GetNativeArray(CharacterControllerInternalType);
-//            NativeArray<PhysicsGraphicalSmoothing> physicsGraphicalSmoothings = batchInChunk.GetNativeArray(PhysicsGraphicalSmoothingType);
-//
-//            for (int i = 0, count = batchInChunk.Count; i < count; ++i)
-//            {
-//                var smoothing = physicsGraphicalSmoothings[i];
-//                smoothing.CurrentVelocity = ccInternalDatas[i].Velocity;
-//                physicsGraphicalSmoothings[i] = smoothing;
-//            }
-//        }
-//    }
+    [BurstCompile]
+    struct CopyVelocityToGraphicalSmoothingJob : IJobEntityBatch
+    {
+        [ReadOnly] public ComponentTypeHandle<CharacterControllerInternalData> CharacterControllerInternalType;
+        public ComponentTypeHandle<PhysicsGraphicalSmoothing> PhysicsGraphicalSmoothingType;
 
+        public void Execute(ArchetypeChunk batchInChunk, int batchIndex)
+        {
+            NativeArray<CharacterControllerInternalData> ccInternalDatas = batchInChunk.GetNativeArray(CharacterControllerInternalType);
+            NativeArray<PhysicsGraphicalSmoothing> physicsGraphicalSmoothings = batchInChunk.GetNativeArray(PhysicsGraphicalSmoothingType);
+
+            for (int i = 0, count = batchInChunk.Count; i < count; ++i)
+            {
+                var smoothing = physicsGraphicalSmoothings[i];
+                smoothing.CurrentVelocity = ccInternalDatas[i].Velocity;
+                physicsGraphicalSmoothings[i] = smoothing;
+            }
+        }
+    }
+
+    BuildPhysicsWorld m_BuildPhysicsWorldSystem;
+    ExportPhysicsWorld m_ExportPhysicsWorldSystem;
+    EndFramePhysicsSystem m_EndFramePhysicsSystem;
 
     EntityQuery m_CharacterControllersGroup;
     EntityQuery m_SmoothedCharacterControllersGroup;
 
     protected override void OnCreate()
     {
-        m_BuildPhysicsWorldSystem = World.GetExistingSystem<BuildBPhysicsWorldSystem>(); 
+        m_BuildPhysicsWorldSystem = World.GetOrCreateSystem<BuildPhysicsWorld>();
+        m_ExportPhysicsWorldSystem = World.GetOrCreateSystem<ExportPhysicsWorld>();
+        m_EndFramePhysicsSystem = World.GetOrCreateSystem<EndFramePhysicsSystem>();
+
         EntityQueryDesc query = new EntityQueryDesc
         {
             All = new ComponentType[]
             {
                 typeof(CharacterControllerComponentData),
                 typeof(CharacterControllerInternalData),
+                typeof(PhysicsCollider),
                 typeof(Translation),
                 typeof(Rotation)
             }
@@ -499,6 +552,7 @@ public class CharacterControllerSystem : SystemBase
             All = new ComponentType[]
             {
                 typeof(CharacterControllerInternalData),
+                typeof(PhysicsGraphicalSmoothing)
             }
         });
     }
@@ -510,56 +564,59 @@ public class CharacterControllerSystem : SystemBase
 
         // Combine implicit input dependency with the user one
         Dependency = JobHandle.CombineDependencies(Dependency, m_InputDependency);
- 
+
+        var chunks = m_CharacterControllersGroup.CreateArchetypeChunkArray(Allocator.TempJob);
 
         var ccComponentType = GetComponentTypeHandle<CharacterControllerComponentData>();
-        var ccInternalType = GetComponentTypeHandle<CharacterControllerInternalData>(); 
+        var ccInternalType = GetComponentTypeHandle<CharacterControllerInternalData>();
+        var physicsColliderType = GetComponentTypeHandle<PhysicsCollider>();
         var translationType = GetComponentTypeHandle<Translation>();
         var rotationType = GetComponentTypeHandle<Rotation>();
 
-        //var deferredImpulses = new NativeStream(chunks.Length, Allocator.TempJob);
+        var deferredImpulses = new NativeStream(chunks.Length, Allocator.TempJob);
 
         var ccJob = new CharacterControllerJob
         {
             // Archetypes
-            CharacterControllerComponentType = ccComponentType, 
+            CharacterControllerComponentType = ccComponentType,
             CharacterControllerInternalType = ccInternalType,
+            PhysicsColliderType = physicsColliderType,
             TranslationType = translationType,
             RotationType = rotationType, 
 
             // Input
             DeltaTime = Time.DeltaTime,
             PhysicsWorld = m_BuildPhysicsWorldSystem.PhysicsWorld,
-           // DeferredImpulseWriter = deferredImpulses.AsWriter()
+            DeferredImpulseWriter = deferredImpulses.AsWriter()
         };
 
-//        Dependency = JobHandle.CombineDependencies(Dependency, m_BuildPhysicsWorldSystem.GetOutputDependency());
+        Dependency = JobHandle.CombineDependencies(Dependency, m_ExportPhysicsWorldSystem.GetOutputDependency());
         Dependency = ccJob.ScheduleParallel(m_CharacterControllersGroup, 1, Dependency);
 
-//        var copyVelocitiesHandle = new CopyVelocityToGraphicalSmoothingJob
-//        {
-//            CharacterControllerInternalType = GetComponentTypeHandle<CharacterControllerInternalData>(true),
-//            PhysicsGraphicalSmoothingType = GetComponentTypeHandle<PhysicsGraphicalSmoothing>()
-//        }.ScheduleParallel(m_SmoothedCharacterControllersGroup, 1, Dependency);
+        var copyVelocitiesHandle = new CopyVelocityToGraphicalSmoothingJob
+        {
+            CharacterControllerInternalType = GetComponentTypeHandle<CharacterControllerInternalData>(true),
+            PhysicsGraphicalSmoothingType = GetComponentTypeHandle<PhysicsGraphicalSmoothing>()
+        }.ScheduleParallel(m_SmoothedCharacterControllersGroup, 1, Dependency);
 
-//        var applyJob = new ApplyDefferedPhysicsUpdatesJob()
-//        {
-//            Chunks = chunks,
-//            DeferredImpulseReader = deferredImpulses.AsReader(),
-//            PhysicsVelocityData = GetComponentDataFromEntity<PhysicsVelocity>(),
-//            PhysicsMassData = GetComponentDataFromEntity<PhysicsMass>(),
-//            TranslationData = GetComponentDataFromEntity<Translation>(),
-//            RotationData = GetComponentDataFromEntity<Rotation>()
-//        };
-//
-//        Dependency = applyJob.Schedule(Dependency);
+        var applyJob = new ApplyDefferedPhysicsUpdatesJob()
+        {
+            Chunks = chunks,
+            DeferredImpulseReader = deferredImpulses.AsReader(),
+            PhysicsVelocityData = GetComponentDataFromEntity<PhysicsVelocity>(),
+            PhysicsMassData = GetComponentDataFromEntity<PhysicsMass>(),
+            TranslationData = GetComponentDataFromEntity<Translation>(),
+            RotationData = GetComponentDataFromEntity<Rotation>()
+        };
 
-    //    Dependency = JobHandle.CombineDependencies(Dependency, copyVelocitiesHandle);
+        Dependency = applyJob.Schedule(Dependency);
 
-    //    var disposeHandle = deferredImpulses.Dispose(Dependency);
+        Dependency = JobHandle.CombineDependencies(Dependency, copyVelocitiesHandle);
+
+        var disposeHandle = deferredImpulses.Dispose(Dependency);
 
         // Must finish all jobs before physics step end
-   //     m_EndFramePhysicsSystem.AddInputDependency(disposeHandle);
+        m_EndFramePhysicsSystem.AddInputDependency(disposeHandle);
 
         // Invalidate input dependency since it's been used by now
         m_InputDependency = default;

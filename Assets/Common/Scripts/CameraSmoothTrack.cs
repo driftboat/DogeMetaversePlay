@@ -1,6 +1,8 @@
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
+using Unity.Physics;
+using Unity.Physics.Systems;
 using Unity.Transforms;
 using UnityEngine;
 
@@ -53,13 +55,13 @@ class SmoothlyTrackCameraTarget : SystemBase
     {
     }
 
-    BuildBPhysicsWorldSystem _mBuildPhysicsWorldSystem; 
+    BuildPhysicsWorld m_BuildPhysicsWorldSystem; 
     EntityQuery m_CharacterGunInputQuery; 
     
     protected override void OnCreate()
     {
         base.OnCreate();
-        _mBuildPhysicsWorldSystem = World.GetExistingSystem<BuildBPhysicsWorldSystem>(); 
+        m_BuildPhysicsWorldSystem = World.GetExistingSystem<BuildPhysicsWorld>(); 
         m_CharacterGunInputQuery = GetEntityQuery(typeof(CharacterGunInput));
      
         
@@ -82,7 +84,7 @@ class SmoothlyTrackCameraTarget : SystemBase
         commandBuffer.Playback(EntityManager);
         commandBuffer.Dispose();
 
-        BPhysicsWorld world = _mBuildPhysicsWorldSystem.PhysicsWorld;
+       PhysicsWorld world = m_BuildPhysicsWorldSystem.PhysicsWorld;
  
         var input = GetSingleton<CharacterGunInput>();
 
