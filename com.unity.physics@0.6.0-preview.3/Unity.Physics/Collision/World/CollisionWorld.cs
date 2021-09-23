@@ -284,8 +284,10 @@ namespace Unity.Physics
             int3 grid = stGrid;
             for (; grid.x <= edGrid.x; grid.x++)
             {
-                for (; grid.y <= edGrid.x; grid.y++)
+                grid.y = stGrid.y;
+                for (; grid.y <= edGrid.y; grid.y++)
                 {
+                    grid.z = stGrid.z;
                     for (; grid.z <= edGrid.z; grid.z++)
                     {
                         if (m_posBBodyMap.ContainsKey(grid))
