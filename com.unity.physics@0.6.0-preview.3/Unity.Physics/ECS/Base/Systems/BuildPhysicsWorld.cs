@@ -27,6 +27,7 @@ namespace Unity.Physics.Systems
         public EntityQuery StaticEntityGroup { get; private set; }
         public EntityQuery JointEntityGroup { get; private set; }
 
+        public EntityQuery BoxEntityGroup { get; private set; }
         public EntityQuery CollisionWorldProxyGroup { get; private set; }
 
         internal NativeArray<int> HaveStaticBodiesChanged = new NativeArray<int>(1, Allocator.Persistent);
@@ -37,10 +38,11 @@ namespace Unity.Physics.Systems
         internal NativeHashMap<uint, long> IntegrityCheckMap = new NativeHashMap<uint, long>(4, Allocator.Persistent);
 #endif
 
+        EndFixedStepSimulationEntityCommandBufferSystem m_CommandBufferSystem;
         protected override void OnCreate()
         {
             base.OnCreate();
-
+            m_CommandBufferSystem = World.GetOrCreateSystem<EndFixedStepSimulationEntityCommandBufferSystem>();
             DynamicEntityGroup = GetEntityQuery(new EntityQueryDesc
             {
                 All = new ComponentType[]
@@ -70,7 +72,8 @@ namespace Unity.Physics.Systems
                 None = new ComponentType[]
                 {
                     typeof(PhysicsExclude),
-                    typeof(PhysicsVelocity)
+                    typeof(PhysicsVelocity),
+                    typeof(BoxType),
                 }
             });
 
@@ -84,6 +87,26 @@ namespace Unity.Physics.Systems
                 None = new ComponentType[]
                 {
                     typeof(PhysicsExclude)
+                }
+            });
+
+            BoxEntityGroup = GetEntityQuery(new EntityQueryDesc
+            {
+                All = new ComponentType[]
+                {
+                    typeof(PhysicsCollider),
+                    typeof(BoxType),
+                },
+                Any = new ComponentType[]
+                {
+                    typeof(LocalToWorld),
+                    typeof(Translation),
+                    typeof(Rotation)
+                },
+                None = new ComponentType[]
+                {
+                    typeof(PhysicsExclude),
+                    typeof(PhysicsVelocity),
                 }
             });
 
@@ -106,6 +129,7 @@ namespace Unity.Physics.Systems
 
         protected override void OnUpdate()
         {
+            var commandBufferParallel = m_CommandBufferSystem.CreateCommandBuffer().AsParallelWriter();
             // Make sure last frame's physics jobs are complete before any new ones start
             m_InputDependencyToComplete.Complete();
 
@@ -115,6 +139,7 @@ namespace Unity.Physics.Systems
             int numDynamicBodies = DynamicEntityGroup.CalculateEntityCount();
             int numStaticBodies = StaticEntityGroup.CalculateEntityCount();
             int numJoints = JointEntityGroup.CalculateEntityCount();
+            int numBoxes = BoxEntityGroup.CalculateEntityCount();
 
             int previousStaticBodyCount = PhysicsWorld.NumStaticBodies;
 
@@ -122,7 +147,7 @@ namespace Unity.Physics.Systems
             PhysicsWorld.Reset(
                 numStaticBodies + 1, // +1 for the default static body
                 numDynamicBodies,
-                numJoints);
+                numJoints, numBoxes);
 
             if (PhysicsWorld.NumBodies == 0)
             {
@@ -253,6 +278,24 @@ namespace Unity.Physics.Systems
                     }.ScheduleParallel(StaticEntityGroup, 1, Dependency));
                 }
 
+                if (numBoxes > 0)
+                {
+                    jobHandles.Add(new Jobs.CreateRigidBodies
+                    {
+                        EntityType = entityType,
+                        LocalToWorldType = localToWorldType,
+                        ParentType = parentType,
+                        PositionType = positionType,
+                        RotationType = rotationType,
+                        PhysicsColliderType = physicsColliderType,
+                        PhysicsCustomTagsType = physicsCustomTagsType,
+
+                        FirstBodyIndex = numDynamicBodies + numStaticBodies + 1,
+                        RigidBodies = PhysicsWorld.AllBodies,
+                        EntityBodyIndexMap = PhysicsWorld.CollisionWorld.EntityBodyIndexMap.AsParallelWriter(),
+                    }.ScheduleParallel(BoxEntityGroup, 1, Dependency));
+                }
+
                 var handle = JobHandle.CombineDependencies(jobHandles);
                 jobHandles.Clear();
 
@@ -288,6 +331,21 @@ namespace Unity.Physics.Systems
                     HaveStaticBodiesChanged, handle, stepComponent.MultiThreaded > 0);
                 jobHandles.Add(buildBroadphaseHandle);
 
+                var bodyMapPWriter = PhysicsWorld.CollisionWorld.m_posBBodyMap.AsParallelWriter();
+                var h = Entities
+                    .WithName("BoxMapCollectionJob")
+                    .WithBurst()
+                    .ForEach(
+                        (Entity entity, int entityInQueryIndex, in Translation translation,
+                            in BoxNeedInit boxNeedInit) =>
+                        {
+                            var coord = BMath.PositionToGridCoord(translation.Value);
+                            bodyMapPWriter.TryAdd(coord, new BBody {Entity = entity});
+                            commandBufferParallel.RemoveComponent<BoxNeedInit>(entityInQueryIndex, entity);
+                        }
+                    ).ScheduleParallel(this.Dependency);
+                jobHandles.Add(h);
+                m_CommandBufferSystem.AddJobHandleForProducer(h);
                 m_OutputDependency = JobHandle.CombineDependencies(jobHandles);
             }
 

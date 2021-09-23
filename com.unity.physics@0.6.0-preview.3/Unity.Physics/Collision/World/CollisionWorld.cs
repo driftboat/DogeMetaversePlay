@@ -8,6 +8,7 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using static Unity.Physics.Math;
 using Unity.Jobs.LowLevel.Unsafe;
+using UnityEngine;
 
 namespace Unity.Physics
 {
@@ -16,14 +17,19 @@ namespace Unity.Physics
     [NoAlias]
     public struct CollisionWorld : ICollidable, IDisposable
     {
+        [NoAlias] public NativeHashMap<int3, BBody> m_posBBodyMap;
+
         [NoAlias] private NativeArray<RigidBody> m_Bodies;    // storage for all the rigid bodies
         [NoAlias] internal Broadphase Broadphase;             // bounding volume hierarchies around subsets of the rigid bodies
         [NoAlias] internal NativeHashMap<Entity, int> EntityBodyIndexMap;
+
+        public int NumAllBodies => Broadphase.NumStaticBodies + Broadphase.NumDynamicBodies + m_posBBodyMap.Capacity;
 
         public int NumBodies => Broadphase.NumStaticBodies + Broadphase.NumDynamicBodies;
         public int NumStaticBodies => Broadphase.NumStaticBodies;
         public int NumDynamicBodies => Broadphase.NumDynamicBodies;
 
+        public NativeArray<RigidBody> AllBodies => m_Bodies.GetSubArray(0, NumAllBodies);
         public NativeArray<RigidBody> Bodies => m_Bodies.GetSubArray(0, NumBodies);
         public NativeArray<RigidBody> StaticBodies => m_Bodies.GetSubArray(NumDynamicBodies, NumStaticBodies);
         public NativeArray<RigidBody> DynamicBodies => m_Bodies.GetSubArray(0, NumDynamicBodies);
@@ -37,6 +43,7 @@ namespace Unity.Physics
             m_Bodies = new NativeArray<RigidBody>(numStaticBodies + numDynamicBodies, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             Broadphase = new Broadphase(numStaticBodies, numDynamicBodies);
             EntityBodyIndexMap = new NativeHashMap<Entity, int>(m_Bodies.Length, Allocator.Persistent);
+            m_posBBodyMap = new NativeHashMap<int3, BBody>(0, Allocator.Persistent);
         }
 
         internal CollisionWorld(NativeArray<RigidBody> bodies, Broadphase broadphase)
@@ -44,11 +51,16 @@ namespace Unity.Physics
             m_Bodies = bodies;
             Broadphase = broadphase;
             EntityBodyIndexMap = new NativeHashMap<Entity, int>(m_Bodies.Length, Allocator.Persistent);
+            m_posBBodyMap = new NativeHashMap<int3, BBody>(0, Allocator.Persistent);
         }
 
-        public void Reset(int numStaticBodies, int numDynamicBodies)
+        public void Reset(int numStaticBodies, int numDynamicBodies, int numBoxes)
         {
-            SetCapacity(numStaticBodies + numDynamicBodies);
+            SetCapacity(numStaticBodies + numDynamicBodies + numBoxes);
+            if (m_posBBodyMap.Capacity < numBoxes)
+            {
+                m_posBBodyMap.Capacity = numBoxes;
+            }
             Broadphase.Reset(numStaticBodies, numDynamicBodies);
             EntityBodyIndexMap.Clear();
         }
@@ -254,7 +266,39 @@ namespace Unity.Physics
         public bool CastCollider(ColliderCastInput input, ref NativeList<ColliderCastHit> allHits) => QueryWrappers.ColliderCast(ref this, input, ref allHits);
         public bool CastCollider<T>(ColliderCastInput input, ref T collector) where T : struct, ICollector<ColliderCastHit>
         {
-            return Broadphase.CastCollider(input, m_Bodies, ref collector);
+            return CastBoxCollider(input, ref collector) | Broadphase.CastCollider(input, m_Bodies, ref collector);
+        }
+
+        public unsafe bool CastBoxCollider<T>(ColliderCastInput input, ref T collector)
+            where T : struct, ICollector<ColliderCastHit>
+        {
+            bool hasHit = false;
+            var rigTran = new RigidTransform(input.Orientation, input.Start);
+            Aabb aabbStart = input.Collider->CalculateAabb(rigTran);
+            Aabb aabbEnd = input.Collider->CalculateAabb(rigTran);
+            var st = math.min(aabbStart.Min, aabbEnd.Min);
+            var ed = math.max(aabbStart.Max, aabbEnd.Max);
+
+            int3 stGrid = (int3)math.floor(st);
+            int3 edGrid = (int3)math.ceil(ed);
+            int3 grid = stGrid;
+            for (; grid.x <= edGrid.x; grid.x++)
+            {
+                for (; grid.y <= edGrid.x; grid.y++)
+                {
+                    for (; grid.z <= edGrid.z; grid.z++)
+                    {
+                        if (m_posBBodyMap.ContainsKey(grid))
+                        {
+                            var index = EntityBodyIndexMap.TryGetValue(m_posBBodyMap[grid].Entity, out var idxA) ? idxA : -1;
+                            var body =  m_Bodies[index];
+                            hasHit |= body.CastCollider(input, ref collector);
+                        }
+                    }
+                }
+            }
+
+            return hasHit;
         }
 
         public bool CalculateDistance(PointDistanceInput input) => QueryWrappers.CalculateDistance(ref this, input);
