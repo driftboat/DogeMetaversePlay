@@ -13,7 +13,7 @@ Each world is based on a map of 65536 plots of land (256x256), each land is 50x5
 - [ ] Add "RemoveTerrain" entity when player leave land
 
 ## InitTerrainSystem
-- [ ] Load or init Lands.
+- [x] Load or init Lands.
 
 ## SetGunShowBulletSystem
 - [x] Show currently selected building box
@@ -33,7 +33,7 @@ Each world is based on a map of 65536 plots of land (256x256), each land is 50x5
 # Other Systems
 
 ## Save System
-- [ ] Save lands
+- [x] Save lands
 
 ## RemoveTerrain System
 - [ ] Remove lands
