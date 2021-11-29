@@ -32,14 +32,14 @@ public class DestoyLandSystem : SystemBase
             .WithName("DestroyLandJob") 
             .WithNone<GunShowBox>()
             .WithReadOnly(loadedLandBuffer)
-            .ForEach((Entity entity, int entityInQueryIndex, in BoxType box,in LocalToWorld localToWorld) =>
+            .ForEach((Entity entity, int entityInQueryIndex, in ColorBox  box,in LocalToWorld localToWorld) =>
             {
-                var land = BMath.WorldPosToLand(localToWorld.Position);
+     
                 var shouldDestroy = true;
                 for (int j = 0; j < loadedLandBuffer.Length; j++)
                 {
                     var lb = loadedLandBuffer[j];
-                    if (math.all(lb.LandPos == land))
+                    if (math.all(lb.LandPos == box.Land))
                     {
                         shouldDestroy = false;
                         break;

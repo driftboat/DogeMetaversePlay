@@ -39,6 +39,7 @@ public class UpdateLandSystem : SystemBase
             if (math.any(landLoader.CurrentLand.LandPos != land))
             {
                 var showLands = new NativeList<int3>(9, Allocator.Temp);
+                //--add create current land entity if the land is not exist
                 showLands.Add(land);
                 bool exist = false;
                 Debug.Log("land change:"+worldId + "," + landx + "," + landy);
@@ -56,11 +57,14 @@ public class UpdateLandSystem : SystemBase
                 if (!exist)
                 {
                     var entity = ecb.CreateEntity(); 
-                    ecb.AddComponent(entity, new CreateLand{Land = new int3(worldId, landx, landy)});
+                    ecb.AddComponent(entity, new CreateLand{Land = land});
+                    loadedLandBuffer.Add(new Land{LandPos = land});
                 }
+                //search nearby and add create  land entity if the land is not exist
                 for (int i = 1; i <= 8; i++)
                 {
                    int3 nearBy = BMath.GetLandNearBy(worldId, landx, landy, i);
+                   Debug.Log("land nearBy:"+i + ","+nearBy );
                   
                    if (math.any(nearBy != int3.zero))
                    {
@@ -84,12 +88,13 @@ public class UpdateLandSystem : SystemBase
                        } 
                    }
                 }
-
+                //--remove invisible lands
                 for (int j = 0; j < loadedLandBuffer.Length; j++)
                 {
                     var lb = loadedLandBuffer[j];
                     if (!showLands.Contains(lb.LandPos))
                     {
+                        Debug.Log("remove land:"+lb.LandPos);
                         loadedLandBuffer.RemoveAt(j);
                         j--;
                     }
