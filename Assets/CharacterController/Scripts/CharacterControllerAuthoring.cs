@@ -364,7 +364,7 @@ public class CharacterControllerSystem : SystemBase
               //  shouldJump = jumpRequested && ccInternalData.SupportedState == CharacterSupportState.Supported;
               
               shouldFall = fallRequest  && ccInternalData.SupportedState != CharacterSupportState.Supported;
-              shouldJump = jumpRequested;
+              shouldJump = ccComponentData.Mode==0 ? jumpRequested && ccInternalData.SupportedState == CharacterSupportState.Supported : jumpRequested;
             }
 
             // Turning
