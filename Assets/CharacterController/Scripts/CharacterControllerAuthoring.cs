@@ -315,6 +315,14 @@ public class CharacterControllerSystem : SystemBase
                         }
                     }
                 }
+                else
+                {
+                   float vg = math.dot(ccComponentData.Gravity, ccInternalData.Velocity.Linear);
+                   if (vg == 0)
+                   {
+                       ccInternalData.UnsupportedVelocity = float3.zero;
+                   }
+                }
 
                 // Write back and orientation integration
                 position.Value = transform.pos;
